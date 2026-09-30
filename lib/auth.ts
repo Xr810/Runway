@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { pool } from "./postgres";
-import { cookieName, validSession } from "./session";
+import { cookieName, ownerId, validSession } from "./session";
 
 const key = "session-version";
 let cached: { value: number; at: number } | null = null;
@@ -19,6 +19,6 @@ export async function bumpSessionVersion() {
 }
 export async function getUser() {
   const token = (await cookies()).get(cookieName)?.value;
-  return token && validSession(token, await sessionVersion()) ? { userId: "owner", displayName: "User" } : null;
+  return token && validSession(token, await sessionVersion()) ? { userId: ownerId(), displayName: "User" } : null;
 }
 export async function requireUser() { const user = await getUser(); if (!user) redirect("/login"); return user; }

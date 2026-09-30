@@ -25,3 +25,8 @@ features; review their data policies before uploading personal information.
 Verify `/api/health`, sign-in, storage, and core flows after deployment. Retain previous
 images and matching backups. Original production scripts, access-policy identifiers,
 and one-off import utilities are intentionally not published.
+
+Keep `OWNER_ID` stable across upgrades (default: `owner`). When migrating from a private
+build, set it to that build's existing session subject/account ID before starting the new
+image. This preserves signed sessions and access to existing AI run history without
+rewriting user data. Keep the same `SESSION_SECRET` and session-version metadata too.

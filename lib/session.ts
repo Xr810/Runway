@@ -1,6 +1,7 @@
 import { createHmac, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 const derive = promisify(scrypt);
+export const ownerId = () => process.env.OWNER_ID || "owner";
 export const cookieName = "opportunity_session";
 export const sessionSeconds = 7 * 24 * 60 * 60;
 export function appOrigin() { return new URL(process.env.APP_ORIGIN || "http://localhost:3000").origin; }
@@ -15,7 +16,7 @@ function secret() {
 function signature(value: string) { return createHmac("sha256", secret()).update(value).digest("base64url"); }
 /** `version` is the server-side session generation; bumping it signs every device out. */
 export function createSession(version = 0, now = Date.now()) {
-  const payload = Buffer.from(JSON.stringify({ sub: "owner", exp: Math.floor(now / 1000) + sessionSeconds, ver: version })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ sub: ownerId(), exp: Math.floor(now / 1000) + sessionSeconds, ver: version })).toString("base64url");
   return payload + "." + signature(payload);
 }
 export function validSession(token: string | undefined, version = 0, now = Date.now()) {
@@ -26,7 +27,7 @@ export function validSession(token: string | undefined, version = 0, now = Date.
     const expected = Buffer.from(signature(parts[0])), actual = Buffer.from(parts[1]);
     if (actual.length !== expected.length || !timingSafeEqual(expected, actual)) return false;
     const payload = JSON.parse(Buffer.from(parts[0], "base64url").toString());
-    return payload.sub === "owner" && Number.isInteger(payload.exp) && payload.exp > Math.floor(now / 1000) && (payload.ver ?? 0) === version;
+    return payload.sub === ownerId() && Number.isInteger(payload.exp) && payload.exp > Math.floor(now / 1000) && (payload.ver ?? 0) === version;
   } catch { return false; }
 }
 export async function validPassword(password: unknown) {
