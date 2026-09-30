@@ -3,8 +3,6 @@ import { useState } from "react";
 import { CartesianGrid, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
 import { cn } from "@/lib/utils";
 import { type Entry, dayDiff, internshipValue, score } from "@/lib/model";
-import { useEnrichment } from "../evaluation";
-import { type Assessment, type EvaluationWeights } from "@/lib/enrichment-contract";
 import { useDesk } from "../store";
 import { EvaluationQueue } from "../evaluation";
 import { CompanyMark, EmptyState, PageHeader, Panel, Segmented, Stat, jobStages, solidTones } from "../ui";
@@ -16,29 +14,27 @@ const pct = (a: number, b: number) => b ? Math.round(a / b * 100) + "%" : "—";
 
 export default function InsightsView() {
   const { data } = useDesk();
-  const enrichment=useEnrichment();
   const [tab, setTab] = useState<"overview" | "evaluation">("overview");
   const jobs = data.entries.filter(e => e.kind === "job");
   return <>
     <PageHeader title="洞察" description="申请进展、等待时长与岗位评估。">
       <Segmented value={tab} onChange={setTab} options={[{ value: "overview", label: "概览" }, { value: "evaluation", label: "岗位评估" }]} />
     </PageHeader>
-    {tab === "overview" ? <Overview jobs={jobs} weights={enrichment.feed?.profile.evaluationWeights} assessments={enrichment.feed?.states.filter(s=>s.kind==="job"&&s.result?.kind==="assessment").map(s=>({id:s.target_id,result:s.result as Assessment}))||[]} /> : <EvaluationQueue entries={jobs} />}
+    {tab === "overview" ? <Overview jobs={jobs} /> : <EvaluationQueue entries={jobs} />}
   </>;
 }
 
-function Overview({ jobs,weights,assessments }: { jobs: Entry[]; weights?:EvaluationWeights; assessments:{id:string;result:Assessment}[] }) {
-  const { openEntry, logoFor } = useDesk();
+function Overview({ jobs }: { jobs: Entry[] }) {
+  const { openEntry, logoFor, evaluationWeights } = useDesk();
   if (!jobs.length) return <EmptyState title="还没有岗位数据" description="添加岗位后，这里会显示申请漏斗和转化情况。" />;
   const applied = jobs.filter(e => e.applied || reached(e, afterApply)), screened = jobs.filter(e => reached(e, afterScreen)), offers = jobs.filter(e => e.status === "Offer");
   const stages = jobStages.map(s => ({ ...s, count: jobs.filter(e => (s.statuses as readonly string[]).includes(e.status)).length }));
   const max = Math.max(...stages.map(s => s.count), 1);
   const waiting = jobs.filter(e => e.status === "已投递" && e.applied).map(e => ({ e, days: Math.max(0, -dayDiff(e.applied)) })).sort((a, b) => b.days - a.days);
   const maxWait = Math.max(28, ...waiting.map(w => w.days));
-  const byId=new Map(assessments.map(s=>[s.id,s.result]));
-  const evalScore=(e:Entry)=>{const r=byId.get(e.id);return score(e,weights,r?{returnOffer:r.returnOffer?.score??null,academic:r.academic?.score??null}:undefined)};
+  const evalScore = (e: Entry) => score(e, evaluationWeights);
   const scored = jobs.filter(e => evalScore(e) !== null).sort((a, b) => evalScore(b)! - evalScore(a)!).slice(0, 8);
-  const scatter = jobs.flatMap(e=>{const r=byId.get(e.id);const y=internshipValue({...e,career:r?.career.score??e.career,returnOffer:r?.returnOffer?.score??e.returnOffer,academic:r?.academic?.score??e.academic});return e.fit!==null&&y!==null?[{x:e.fit,y,name:e.organization+" · "+e.title,id:e.id}]:[]});
+  const scatter = jobs.flatMap(e=>{const y=internshipValue(e);return e.fit!==null&&y!==null?[{x:e.fit,y,name:e.organization+" · "+e.title,id:e.id}]:[]});
   return <div className="flex flex-col gap-6">
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <Stat label="岗位总数" value={jobs.length} hint={`${jobs.filter(e => e.status === "待投递").length} 个还没投递`} />

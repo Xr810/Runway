@@ -37,7 +37,7 @@ export default function ScheduleView() {
         <ul className="flex flex-col py-1">{inMonth.filter(e => e.date === date).map(ev => <li key={ev.id}><button onClick={() => openEntry(ev.entry.id)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/50">
           <CompanyMark name={ev.entry.organization || ev.entry.title} src={ev.entry.kind === "job" ? logoFor(ev.entry.organization) : undefined} size="sm" />
           <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{ev.entry.title}</p>
-            <p className="truncate text-xs text-muted-foreground">{ev.time && <span className="tabular font-medium text-foreground">{ev.time} · </span>}{ev.detail || `${ev.entry.organization || (ev.entry.kind === "project" ? "个人项目" : "比赛")} · ${ev.entry.nextAction || ev.entry.status}`}</p></div>
+            <p className="truncate text-xs text-muted-foreground">{ev.time && <span className="tabular font-medium text-foreground">{ev.time} · </span>}{ev.detail || `${ev.entry.organization || (ev.entry.kind === "project" ? "个人项目" : ev.entry.kind === "job" ? "公司未填写" : "比赛")} · ${ev.entry.nextAction || ev.entry.status}`}</p></div>
           <Pill tone={eventTone[ev.type] ?? "gray"}>{ev.label}</Pill>
         </button></li>)}</ul>
       </li>; })}</ol>

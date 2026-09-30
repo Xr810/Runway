@@ -22,13 +22,13 @@ export async function enrichmentRequest(body?: unknown, path = "/api/enrichment"
   return readJson<Awaited<ReturnType<Response["json"]>>>(r);
 }
 export function useEnrichment() {
-  const { setBrandLogos } = useDesk();
+  const { setBrandLogos, setEvaluationWeights } = useDesk();
   const [feed, setFeed] = useState<EnrichmentFeed | null>(null), [error, setError] = useState("");
   const apply = useCallback((d: EnrichmentFeed) => {
-    setFeed(d); setError("");
+    setFeed(d); setError(""); setEvaluationWeights(d.profile.evaluationWeights || weightPresets.balanced.weights);
     const logos: Record<string, string> = {}; for (const s of d.states) if (s.result?.kind === "brand") logos[s.kind + ":" + s.target_id] = s.result.assetUrl;
     setBrandLogos(logos);
-  }, [setBrandLogos]);
+  }, [setBrandLogos, setEvaluationWeights]);
   const reload = useCallback(async () => { try { apply(await enrichmentRequest()); } catch (e) { setError((e as Error).message); } }, [apply]);
   useEffect(() => {
     let active = true;
@@ -127,12 +127,11 @@ export function EvaluationDialog() {
 
 /** Queue overview for all job assessments. */
 export function EvaluationQueue({ entries }: { entries: Entry[] }) {
-  const { reload, openEntry, logoFor } = useDesk();
+  const { reload, openEntry, logoFor, evaluationWeights: weights } = useDesk();
   const { feed, error, reload: reloadFeed } = useEnrichment();
   const [busy, setBusy] = useState(false);
   const [customWeights, setCustomWeights] = useState<EvaluationWeights | null>(null);
   const profile = feed?.profile;
-  const weights:EvaluationWeights = profile?.evaluationWeights || weightPresets.balanced.weights;
   async function saveWeights(preset: EvaluationProfile["evaluationPreset"], nextWeights: EvaluationWeights) {
     if (!profile) return;
     const total = Object.values(nextWeights).reduce((a,b)=>a+b,0);
@@ -170,11 +169,11 @@ export function EvaluationQueue({ entries }: { entries: Entry[] }) {
         const s = feed?.states.find(x => x.kind === "job" && x.target_id === e.id), t = latest.get(e.id), r = s?.result?.kind === "assessment" ? s.result : null;
         const partial = !!r && factors.some(([key]) => (r[key] as {score:number|null}|undefined)?.score === null || !r[key]);
         const status = s?.locked ? { label: "已锁定", tone: "amber" as Tone } : s?.stale ? { label: "待更新", tone: "amber" as Tone } : partial && t?.status === "completed" ? { label: "资料不足", tone: "amber" as Tone } : t ? taskStatus[t.status] : { label: "未评估", tone: "gray" as Tone };
-        const weighted = score(e,weights,r?{returnOffer:r.returnOffer?.score??null,academic:r.academic?.score??null}:undefined);
+        const weighted = score(e,weights);
         return <button key={e.id} onClick={() => openEntry(e.id)} className="flex w-full items-center gap-3 border-b px-4 py-3 text-left last:border-b-0 hover:bg-muted/50">
           <CompanyMark name={e.organization} src={logoFor(e.organization)} size="sm" />
           <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{e.title}</p><p className="truncate text-xs text-muted-foreground">{e.organization} · {r?.summary || t?.error || "等待评估"}</p></div>
-          <div className="hidden text-right text-xs text-muted-foreground sm:block">{r ? <>{factors.map(([key,label],i)=>{const f=r[key] || {score:null,reason:"暂无依据"};return <span key={key} title={f.reason}>{i?" · ":""}{label} {f.score===null?"待核实":f.score}</span>})}</> : <>匹配 {e.fit ?? "—"} · 成长 {e.career ?? "—"} · 转正 {e.returnOffer ?? "—"} · 学术 {e.academic ?? "—"} · 前景 {e.outlook ?? "—"}</>}</div>
+          <div className="hidden text-right text-xs text-muted-foreground sm:block">{r ? <>{factors.map(([key,label],i)=>{const f=r[key] || {score:null,reason:"暂无依据"};return <span key={key} title={f.reason}>{i?" · ":""}{label} {e[key]===null?"待核实":e[key]}</span>})}</> : <>匹配 {e.fit ?? "—"} · 成长 {e.career ?? "—"} · 转正 {e.returnOffer ?? "—"} · 学术 {e.academic ?? "—"} · 前景 {e.outlook ?? "—"}</>}</div>
           <span className="tabular w-8 text-right font-semibold">{weighted===null?"—":weighted.toFixed(1)}</span>
           <Pill tone={status?.tone}>{status?.label}</Pill>
         </button>;

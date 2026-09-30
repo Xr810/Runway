@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { type Entry, dayDiff, score } from "@/lib/model";
+import { useDesk } from "./store";
 import { companySymbol } from "@/lib/journey";
 
 export const tones = {
@@ -67,7 +68,8 @@ export function DueLabel({ date, kind }: { date: string; kind?: string }) {
 }
 
 export function ScoreValue({ entry, className }: { entry: Entry; className?: string }) {
-  const value = score(entry);
+  const { evaluationWeights } = useDesk();
+  const value = score(entry, evaluationWeights);
   if (value === null) return <span className={cn("text-muted-foreground", className)}>—</span>;
   const tone = value >= 7.5 ? "text-emerald-700 dark:text-emerald-400" : value >= 5 ? "text-foreground" : "text-muted-foreground";
   return <span className={cn("tabular font-semibold", tone, className)}>{value.toFixed(1)}</span>;
@@ -126,7 +128,7 @@ export function EmptyState({ icon, title, description, action, className }: { ic
 
 export function Segmented<T extends string>({ value, onChange, options, className }: { value: T; onChange: (value: T) => void; options: { value: T; label: ReactNode; count?: number }[]; className?: string }) {
   return <div role="tablist" className={cn("inline-flex h-8 w-fit shrink-0 items-center gap-0.5 rounded-lg bg-muted p-0.5", className)}>
-    {options.map(option => <button key={option.value} role="tab" aria-selected={value === option.value} onClick={() => onChange(option.value)}
+    {options.map(option => <button type="button" key={option.value} role="tab" aria-selected={value === option.value} onClick={() => onChange(option.value)}
       className={cn("inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground [&_svg]:size-3.5", value === option.value && "bg-card text-foreground shadow-sm")}>
       {option.label}{option.count !== undefined && <span className="tabular text-muted-foreground">{option.count}</span>}
     </button>)}

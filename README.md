@@ -55,3 +55,13 @@ npm run build
 API and database integration tests require a disposable test database and may create or
 delete fixture records. Never run them against production. See [SECURITY.md](SECURITY.md)
 for deployment boundaries and private vulnerability reporting.
+
+### 审计修复回归测试
+
+`tests/integration/audit-regressions.test.ts` 验证五维手动评分保护、摘要/链接历史、长简历保存以及真实 ZIP 导出/恢复（含回收站附件、提醒完成历史和简历原文件）。测试会清空业务表，**只能使用名称以 `_test` 结尾的独立临时数据库**。先对该库运行迁移，再用同一 `DATABASE_URL` 启动应用；配置 `BASE_URL`、`TEST_PASSWORD` 和与应用相同的 `ATTACHMENTS_DIR` 后运行：
+
+```sh
+node --env-file=.env.local --import tsx --test tests/integration/audit-regressions.test.ts
+```
+
+业务数据 ZIP 支持读取 v1 和 v2 格式；v2 新增回收站状态及个人数据。恢复只新增缺失记录，已有个人背景/简历、提醒及其完成状态不被覆盖。旧 v1 中缺失父记录的附件会计数提示并跳过。ZIP 不包含 AI 对话/评估历史、图标缓存、密钥或服务器运行配置，不能替代数据库和文件目录的服务器备份。

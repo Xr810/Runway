@@ -6,7 +6,7 @@ import { type Entry, type Attachment, blankEntry, entrySchema, today } from "@/l
 import { type Directory, identity } from "@/lib/journey";
 import { type CompanyWatch } from "@/lib/watches";
 import { type AiFilter } from "@/lib/ai-contract";
-import { type EnrichmentTarget } from "@/lib/enrichment-contract";
+import { type EnrichmentTarget, type EvaluationWeights, weightPresets } from "@/lib/enrichment-contract";
 import { type Reminder } from "@/lib/reminder-schema";
 import { readJson } from "@/lib/api-response";
 export { readJson } from "@/lib/api-response";
@@ -35,6 +35,7 @@ export type Notice = { id: string; seq: string; actor: string; action: string; s
 export type NoticeFeed = { items: Notice[]; unread: number; latest: string; nextBefore: string | null };
 
 type Ctx = {
+  evaluationWeights: EvaluationWeights; setEvaluationWeights: (weights: EvaluationWeights) => void;
   data: DeskData; loading: boolean; error: string; reload: () => Promise<void>;
   saveEntry: (entry: Entry) => Promise<Entry>; patchEntry: (entry: Pick<Entry, "id" | "revision">, patch: Partial<Entry>) => Promise<Entry>;
   removeEntry: (entry: Pick<Entry, "id" | "revision" | "title">) => Promise<void>; upload: (entryId: string, file: File) => Promise<void>;
@@ -53,6 +54,7 @@ export function useDesk() { const value = useContext(DeskContext); if (!value) t
 
 export function DeskProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const [evaluationWeights, setEvaluationWeights] = useState<EvaluationWeights>(weightPresets.balanced.weights);
   const [data, setData] = useState<DeskData>({ entries: [], files: [], versions: [], watches: [], directory: emptyDirectory });
   const [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null), [detail, setDetail] = useState<{ entry: Entry; versions: VersionFull[] } | null>(null);
@@ -70,7 +72,8 @@ export function DeskProvider({ children }: { children: ReactNode }) {
       const next = await fetchDesk();
       setData(next);
       try {
-        const feed = await readJson<{ states: { kind: string; target_id: string; result: { kind: string; assetUrl?: string } | null }[] }>(await fetch("/api/enrichment", { cache: "no-store" }));
+        const feed = await readJson<{ profile: { evaluationWeights: EvaluationWeights }; states: { kind: string; target_id: string; result: { kind: string; assetUrl?: string } | null }[] }>(await fetch("/api/enrichment", { cache: "no-store" }));
+        setEvaluationWeights(feed.profile.evaluationWeights);
         const logos: Record<string, string> = {};
         for (const state of feed.states) if (state.result?.kind === "brand" && state.result.assetUrl) logos[state.kind + ":" + state.target_id] = state.result.assetUrl;
         setBrandLogos(logos);
@@ -91,8 +94,8 @@ export function DeskProvider({ children }: { children: ReactNode }) {
   }, [selectedId, summary, detail]);
 
   // Brand icons cached by the enrichment pipeline; loaded once so list rows can show logos.
-  useEffect(() => { let active = true; fetch("/api/enrichment", { cache: "no-store" }).then(r => readJson<{ states: { kind: string; target_id: string; result: { kind: string; assetUrl?: string } | null }[] }>(r)).then(feed => {
-    if (!active) return; const logos: Record<string, string> = {};
+  useEffect(() => { let active = true; fetch("/api/enrichment", { cache: "no-store" }).then(r => readJson<{ profile: { evaluationWeights: EvaluationWeights }; states: { kind: string; target_id: string; result: { kind: string; assetUrl?: string } | null }[] }>(r)).then(feed => {
+    if (!active) return; setEvaluationWeights(feed.profile.evaluationWeights); const logos: Record<string, string> = {};
     for (const s of feed.states) if (s.result?.kind === "brand" && s.result.assetUrl) logos[s.kind + ":" + s.target_id] = s.result.assetUrl;
     setBrandLogos(logos);
   }).catch(() => {}); return () => { active = false; }; }, []);
@@ -158,7 +161,7 @@ export function DeskProvider({ children }: { children: ReactNode }) {
   const full = detail && summary && detail.entry.id === summary.id && detail.entry.revision === summary.revision ? detail : null;
   const selected = full?.entry ?? summary ?? null;
   const value: Ctx = useMemo(() => ({
-    data, loading, error, reload, saveEntry, patchEntry, removeEntry, upload,
+    evaluationWeights, setEvaluationWeights, data, loading, error, reload, saveEntry, patchEntry, removeEntry, upload,
     selected, selectedVersions: full?.versions ?? [], selectedLoading: !!summary && !full, openEntry: setSelectedId, closeEntry: () => setSelectedId(null),
     draft, editEntry,
     newEntry: (kind, preset) => { setReturnTo(null); setDraft({ ...blankEntry(kind), ...preset }); },
@@ -168,6 +171,6 @@ export function DeskProvider({ children }: { children: ReactNode }) {
     askAssistant: (text: string, send = false) => { setPrefill({ text, send }); setAssistantOpen(true); }, assistantPrefill, takePrefill: () => { const value = assistantPrefill; setPrefill(null); return value; },
     notifications, notificationsError, notificationsOpen, setNotificationsOpen, refreshNotifications,
     reminders, reloadReminders, logoFor, brandLogos, setBrandLogos, guard, setGuard, confirmLeave,
-  }), [data, loading, error, reload, saveEntry, patchEntry, removeEntry, upload, selected, full, summary, returnTo, draft, editEntry, evaluation, aiFilter, applyAiFilter, assistantOpen, assistantPrefill, notifications, notificationsError, notificationsOpen, refreshNotifications, reminders, reloadReminders, logoFor, brandLogos, guard, confirmLeave]);
+  }), [evaluationWeights, data, loading, error, reload, saveEntry, patchEntry, removeEntry, upload, selected, full, summary, returnTo, draft, editEntry, evaluation, aiFilter, applyAiFilter, assistantOpen, assistantPrefill, notifications, notificationsError, notificationsOpen, refreshNotifications, reminders, reloadReminders, logoFor, brandLogos, guard, confirmLeave]);
   return <DeskContext.Provider value={value}>{children}</DeskContext.Provider>;
 }

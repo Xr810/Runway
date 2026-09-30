@@ -42,14 +42,14 @@ function subscribeLayout(listener: () => void) { layoutListeners.add(listener); 
 function writeLayout(value: "list" | "board") { try { localStorage.setItem("runway.jobs.layout", value); } catch { /* preference only */ } layoutListeners.forEach(l => l()); }
 
 export default function JobsView() {
-  const { data, loading, error, reload, openEntry, newEntry, logoFor, aiFilter, applyAiFilter } = useDesk();
+  const { evaluationWeights, data, loading, error, reload, openEntry, newEntry, logoFor, aiFilter, applyAiFilter } = useDesk();
   const params = useSearchParams();
   const [query, setQuery] = useState(params.get("q") || ""), [stage, setStage] = useState<StageKey | "all" | "active">("active");
   const [filters, setFilters] = useState<Partial<Record<AttrKey, string>>>({}), [sort, setSort] = useState<Sort>("priority");
   const layout = useSyncExternalStore(subscribeLayout, readLayout, () => "list" as const), chooseLayout = writeLayout;
   // A ?q= link (e.g. from a browser agent) replaces the search text when it changes.
   const [linkedQuery, setLinkedQuery] = useState(params.get("q"));
-  if (params.get("q") !== linkedQuery) { setLinkedQuery(params.get("q")); if (params.get("q") !== null) setQuery(params.get("q")!); }
+  if (params.get("q") !== linkedQuery) { setLinkedQuery(params.get("q")); setQuery(params.get("q") || ""); }
 
   const pool = useMemo(() => data.entries.filter(e => aiFilter?.kind === "all" ? true : e.kind === "job"), [data.entries, aiFilter]);
   const base = useMemo(() => pool.filter(e => (!aiFilter || (aiFilter.ids ? aiFilter.ids.includes(e.id) : matchesAiFilter(e, aiFilter)))
@@ -59,12 +59,12 @@ export default function JobsView() {
   const visible = useMemo(() => {
     const order = new Map(data.entries.map((e, i) => [e.id, i]));
     return base.filter(e => layout === "board" || stage === "all" || (stage === "active" ? !closed(e) : stageOf(e.status)?.key === stage)).sort((a, b) =>
-      sort === "score" ? (score(b) ?? -1) - (score(a) ?? -1)
+      sort === "score" ? (score(b, evaluationWeights) ?? -1) - (score(a, evaluationWeights) ?? -1)
         : sort === "deadline" ? (keyDate(a)?.date || "9999").localeCompare(keyDate(b)?.date || "9999")
           : sort === "company" ? a.organization.localeCompare(b.organization)
             : sort === "updated" ? order.get(a.id)! - order.get(b.id)!
               : rank(a.priority) - rank(b.priority) || (a.deadline || "9999").localeCompare(b.deadline || "9999"));
-  }, [base, stage, sort, layout, data.entries]);
+  }, [base, stage, sort, layout, data.entries, evaluationWeights]);
   const activeFilters = attributes.filter(a => filters[a.key]).length;
   const activeCount = base.filter(e => !closed(e)).length;
 

@@ -32,6 +32,12 @@ export async function listDeleted() {
   return rows.rows.map(row => ({ ...parse(row), deletedAt: row.deleted_at }));
 }
 
+/** Backup includes every recycled record, without the recycle-bin UI's display limit. */
+export async function exportEntries() {
+  const rows = await pool.query<Row & { deleted_at: string | null }>("SELECT data, revision, updated, deleted_at FROM entries ORDER BY id");
+  return rows.rows.map(row => ({ ...entrySchema.parse({ ...row.data, revision: row.revision }), deletedAt: row.deleted_at }));
+}
+
 const historyFields = (e: Entry) => ({ jd: e.jd, jdStatus: e.jdStatus, jdSavedAt: e.jdSavedAt, summary: e.summary, url: e.url });
 
 async function write(client: PoolClient, next: Entry, previous: Entry | null, now: string) {
@@ -44,14 +50,14 @@ async function write(client: PoolClient, next: Entry, previous: Entry | null, no
     if (inserted.rowCount !== 1) throw new EntryError(409, "记录已存在，请重新加载");
     return next;
   }
-  if (textChanged) await client.query("INSERT INTO versions(id,entry_id,data,created) VALUES($1,$2,$3,$4)", [randomUUID(), next.id, JSON.stringify(historyFields(previous)), now]);
+  if (textChanged || previous.summary !== next.summary || previous.url !== next.url) await client.query("INSERT INTO versions(id,entry_id,data,created) VALUES($1,$2,$3,$4)", [randomUUID(), next.id, JSON.stringify(historyFields(previous)), now]);
   const updated = await client.query("UPDATE entries SET data=$1, revision=$2, updated=$3 WHERE id=$4 AND revision=$5 AND deleted_at IS NULL", [JSON.stringify(next), next.revision, now, next.id, previous.revision]);
   if (updated.rowCount !== 1) throw new EntryError(409, "保存冲突，请重新加载");
   return next;
 }
 
 /** Full save with an optimistic revision check. `restore` never overwrites an existing record. */
-export async function saveEntry(input: unknown, mode: "save" | "restore" = "save") {
+export async function saveEntry(input: unknown, mode: "save" | "restore" = "save", deletedAt: string | null = null) {
   const parsed = entrySchema.safeParse(input); if (!parsed.success) throw new EntryError(400, parsed.error.issues[0].message);
   const entry = parsed.data;
   if (mode === "save" && !entry.revision && entry.kind === "job") {
@@ -66,8 +72,13 @@ export async function saveEntry(input: unknown, mode: "save" | "restore" = "save
     if (mode === "restore" && row) return { entry: parse(row), skipped: true };
     if (row?.deleted_at) throw new EntryError(409, "记录已删除，请先从回收站恢复");
     const previous = row ? parse(row) : null;
+    if (mode === "restore") {
+      const restored = { ...entry, revision: Math.max(1, entry.revision) };
+      await client.query("INSERT INTO entries(id,data,revision,updated,deleted_at) VALUES($1,$2,$3,now(),$4)", [entry.id, JSON.stringify(restored), restored.revision, deletedAt]);
+      return { entry: restored, skipped: false };
+    }
     if ((previous?.revision ?? 0) !== entry.revision) throw new EntryError(409, "记录已更新，请重新打开后再修改");
-    return { entry: await write(client, { ...entry }, mode === "restore" ? null : previous, new Date().toISOString()), skipped: false };
+    return { entry: await write(client, { ...entry }, previous, new Date().toISOString()), skipped: false };
   }, { serializable: true });
 }
 

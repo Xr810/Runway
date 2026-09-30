@@ -47,6 +47,7 @@
     "db",
     "drizzle.config.ts",
     "cloudflare-env.d.ts",
-    "output"
+    "output",
+    "outputs"
   ]
 }

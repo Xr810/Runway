@@ -72,7 +72,10 @@ export function ReminderEditor({ value, onChange }: { value: Reminder | null; on
   const set = (patch: Partial<Reminder>) => value && onChange({ ...value, ...patch });
   const setSchedule = (schedule: Schedule) => set({ schedule });
   const s = value?.schedule;
-  const mode = !s ? "daily" : s.type === "weekly" && [...s.days].sort().join() === "1,2,3,4,5" ? "weekdays" : s.type;
+  const inferredMode = !s ? "daily" : s.type === "weekly" && [...s.days].sort().join() === "1,2,3,4,5" ? "weekdays" : s.type;
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [mode, setMode] = useState<"once" | "daily" | "weekly" | "weekdays">(inferredMode);
+  if ((value?.id ?? null) !== editingId) { setEditingId(value?.id ?? null); setMode(inferredMode); }
   async function save() {
     if (!value) return;
     const parsed = reminderSaveSchema.safeParse(value); if (!parsed.success) { toast.error(parsed.error.issues[0].message); return; }
@@ -85,7 +88,7 @@ export function ReminderEditor({ value, onChange }: { value: Reminder | null; on
       {value && s && <form id="reminder-form" className="grid gap-4" onSubmit={e => { e.preventDefault(); void save(); }}>
         <div className="grid gap-1.5"><Label htmlFor="r-title">提醒内容</Label><Input id="r-title" required autoFocus maxLength={300} placeholder="例如：去 WorldQuant BRAIN 挖因子" value={value.title} onChange={e => set({ title: e.target.value })} /></div>
         <div className="grid gap-2"><Label>重复</Label>
-          <Segmented value={mode} onChange={m => setSchedule(m === "once" ? { type: "once", date: today(), time: s.time } : m === "daily" ? { type: "daily", time: s.time, until: "" } : m === "weekdays" ? { type: "weekly", days: [1, 2, 3, 4, 5], time: s.time, until: "" } : { type: "weekly", days: s.type === "weekly" ? s.days : [1], time: s.time, until: "" })}
+          <Segmented value={mode} onChange={m => { setMode(m); setSchedule(m === "once" ? { type: "once", date: today(), time: s.time } : m === "daily" ? { type: "daily", time: s.time, until: s.type === "once" ? "" : s.until } : m === "weekdays" ? { type: "weekly", days: [1, 2, 3, 4, 5], time: s.time, until: s.type === "once" ? "" : s.until } : { type: "weekly", days: s.type === "weekly" ? s.days : [1], time: s.time, until: s.type === "once" ? "" : s.until }); }}
             options={[{ value: "daily", label: "每天" }, { value: "weekdays", label: "工作日" }, { value: "weekly", label: "每周" }, { value: "once", label: "一次" }]} />
           {s.type === "weekly" && mode === "weekly" && <div className="flex gap-1">{weekdays.map(([d, label]) => <button type="button" key={d} onClick={() => setSchedule({ ...s, days: s.days.includes(d) ? s.days.filter(x => x !== d).length ? s.days.filter(x => x !== d) : s.days : [...s.days, d].sort() })}
             className={cn("size-8 rounded-md border text-xs", s.days.includes(d) ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground")}>{label}</button>)}</div>}

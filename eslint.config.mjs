@@ -15,6 +15,7 @@ const eslintConfig = defineConfig([
     // Local build output and archived one-off scripts.
     "dist/**",
     "output/**",
+    "outputs/**",
     ".wrangler/**",
     ".vinext/**",
     ".sites-runtime/**",

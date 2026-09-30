@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { CalendarDays, ChevronDown, Clock3, Flag, FolderKanban, Pencil, Plus, Search, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Entry, type ProgressLog, closed, dayDiff, today } from "@/lib/model";
@@ -26,9 +27,13 @@ export function KindIcon({ kind, className }: { kind: Entry["kind"]; className?:
 
 export default function ProjectsView() {
   const { data, newEntry, aiFilter, applyAiFilter } = useDesk();
+  const params = useSearchParams();
+  const urlQuery = params.get("q") || "";
+  const [linkedQuery, setLinkedQuery] = useState(urlQuery);
   const thisYear = Number(today().slice(0, 4));
   const [kind, setKind] = useState<"all" | "project" | "competition">("all");
-  const [query, setQuery] = useState(""), [year, setYear] = useState(thisYear), [onlyActive, setOnlyActive] = useState(true), [progress, setProgress] = useState<ProgressDraft | null>(null);
+  const [query, setQuery] = useState(urlQuery), [year, setYear] = useState(thisYear), [onlyActive, setOnlyActive] = useState(true), [progress, setProgress] = useState<ProgressDraft | null>(null);
+  if (urlQuery !== linkedQuery) { setLinkedQuery(urlQuery); setQuery(urlQuery); }
   const all = data.entries.filter(isTrack);
   const aiActive = aiFilter && (aiFilter.kind === "competition" || aiFilter.kind === "project");
   const items = all.filter(e => (kind === "all" || e.kind === kind) && (!aiActive || (aiFilter!.ids ? aiFilter!.ids.includes(e.id) : matchesAiFilter(e, aiFilter!))) && (!onlyActive || !closed(e))

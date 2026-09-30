@@ -3,21 +3,18 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, LoaderCircle, LogOut, RotateCcw, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
-import { entrySchema, today, type Entry } from "@/lib/model";
-import { directorySchema } from "@/lib/journey";
-import { watchSchema } from "@/lib/watches";
-import { gigSchema, type Gig } from "@/lib/part-time-contract";
+import { today, type Entry } from "@/lib/model";
+import { exportArchive, readArchive, restoreArchive, type BackupArchive } from "@/lib/backup-archive";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useDesk, readJson, postJson, type DeskData } from "../store";
+import { useDesk, readJson, postJson } from "../store";
 import { Panel, stamp } from "../ui";
 
 function download(blob: Blob, name: string) { const u = URL.createObjectURL(blob), a = document.createElement("a"); a.href = u; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(u), 10000); }
 
 export default function DataSettings() {
-  const { data, reload } = useDesk();
-  const [busy, setBusy] = useState(false), [restore, setRestore] = useState<{ manifest: DeskData & { partTime?: Gig[] }; files: Record<string, Uint8Array> } | null>(null);
+  const { data, reload, reloadReminders } = useDesk();
+  const [busy, setBusy] = useState(false), [restore, setRestore] = useState<BackupArchive | null>(null);
   const input = useRef<HTMLInputElement>(null), router = useRouter();
   const [deleted, setDeleted] = useState<(Entry & { deletedAt: string })[] | null>(null);
   const loadDeleted = async () => { try { setDeleted((await readJson<{ entries: (Entry & { deletedAt: string })[] }>(await fetch("/api/desk?deleted=1", { cache: "no-store" }))).entries); } catch (e) { toast.error((e as Error).message); } };
@@ -30,44 +27,28 @@ export default function DataSettings() {
   async function exportBackup() {
     setBusy(true);
     try {
-      const fresh = await readJson<DeskData>(await fetch("/api/desk?export=1", { cache: "no-store" }));
-      const partTime = await readJson<{ items: Gig[] }>(await fetch("/api/part-time", { cache: "no-store" }));
-      const files: Record<string, Uint8Array> = { "manifest.json": strToU8(JSON.stringify({ format: "opportunity-desk-v1", exportedAt: new Date().toISOString(), ...fresh, partTime: partTime.items }, null, 2)) };
-      for (const f of fresh.files) { const r = await fetch("/api/desk?file=" + encodeURIComponent(f.id)); if (!r.ok) throw Error("附件下载失败：" + f.name); files["files/" + f.id] = new Uint8Array(await r.arrayBuffer()); }
-      download(new Blob([zipSync(files, { level: 0 }) as BlobPart], { type: "application/zip" }), "runway-backup-" + today() + ".zip"); toast.success("完整备份已导出");
+      const zip = await exportArchive();
+      download(new Blob([zip as BlobPart], { type: "application/zip" }), "runway-backup-" + today() + ".zip"); toast.success("业务数据备份已导出");
     } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   }
   async function readBackup(file: File) {
     try {
       if (file.size > 200 * 1024 * 1024) throw Error("备份超过 200 MB，请分批迁移");
-      const contents = unzipSync(new Uint8Array(await file.arrayBuffer())); if (!contents["manifest.json"]) throw Error("缺少 manifest.json");
-      const m = JSON.parse(strFromU8(contents["manifest.json"]));
-      if (m.format !== "opportunity-desk-v1" || !Array.isArray(m.entries) || !Array.isArray(m.files) || !Array.isArray(m.versions)) throw Error("备份格式无效");
-      m.entries.forEach((e: unknown) => entrySchema.parse(e)); if (m.directory) directorySchema.parse(m.directory);
-      if (m.watches !== undefined) { if (!Array.isArray(m.watches)) throw Error("关注名单格式无效"); m.watches.forEach((w: unknown) => watchSchema.parse(w)); }
-      if (m.partTime !== undefined) { if (!Array.isArray(m.partTime)) throw Error("兼职记录格式无效"); m.partTime.forEach((item: unknown) => gigSchema.parse(item)); }
-      for (const f of m.files) if (typeof f.id !== "string" || typeof f.name !== "string" || !contents["files/" + f.id]) throw Error("备份附件缺失");
-      setRestore({ manifest: m, files: contents });
+      setRestore(readArchive(new Uint8Array(await file.arrayBuffer())));
     } catch (e) { toast.error("无法读取备份：" + (e as Error).message); }
   }
   async function runRestore() {
     if (!restore) return; setBusy(true);
     try {
-      const existing = new Set(data.entries.map(e => e.id)), imported = new Set<string>();
-      for (const entry of restore.manifest.entries) { await postJson("/api/desk", { action: "restore", entry: { ...entry, revision: 0 } }); if (!existing.has(entry.id)) imported.add(entry.id); }
-      for (const file of restore.manifest.files) { const f = new FormData(); f.append("entryId", file.entry_id); f.append("restoreId", file.id); f.append("created", file.created); f.append("file", new File([restore.files["files/" + file.id] as BlobPart], file.name, { type: file.type }));
-        const r = await fetch("/api/desk", { method: "POST", body: f }); if (!r.ok) throw Error("附件恢复失败：" + file.name); }
-      for (const watch of restore.manifest.watches || []) await postJson("/api/watches", { action: "restore", watch: { ...watch, revision: 0 } });
-      if (restore.manifest.directory) await postJson("/api/directory", { action: "restore", directory: restore.manifest.directory });
-      const versions = restore.manifest.versions; for (let i = 0; i < versions.length; i += 50) await postJson("/api/desk", { action: "restoreVersions", versions: versions.slice(i, i + 50) });
-      for (const item of restore.manifest.partTime || []) await postJson("/api/part-time?restore=1", { ...item, revision: 0 });
+      const { orphaned } = await restoreArchive(restore);
       setRestore(null); toast.success("恢复完成，已有记录保持不变");
-    } catch (e) { toast.error("部分内容没有恢复：" + (e as Error).message); } finally { await reload(); setBusy(false); }
+      if (orphaned) toast.warning(`旧备份缺少父记录，已跳过 ${orphaned} 个孤立附件；其余内容已恢复。`);
+    } catch (e) { toast.error("部分内容没有恢复：" + (e as Error).message); } finally { await Promise.all([reload(), reloadReminders(), loadDeleted()]); setBusy(false); }
   }
   return <div className="flex flex-col gap-5">
-    <div><h2 className="text-lg font-semibold">数据与备份</h2><p className="mt-1 text-sm text-muted-foreground">服务器每晚自动备份数据库。这里可以随时导出一份完整备份到本地。</p></div>
+    <div><h2 className="text-lg font-semibold">数据与备份</h2><p className="mt-1 text-sm text-muted-foreground">可以随时导出业务数据备份到本地。</p></div>
     <Panel title="导出" description={`${data.entries.length} 条记录 · ${data.files.length} 个附件 · ${data.versions.length} 个历史版本`}>
-      <div className="flex flex-wrap items-center gap-3"><Button disabled={busy} onClick={() => void exportBackup()}>{busy ? <LoaderCircle className="animate-spin" /> : <Download />}导出完整备份</Button><span className="text-xs text-muted-foreground">ZIP 文件，包含记录、附件、历史版本、公司、关注名单，以及兼职与收入。</span></div>
+      <div className="flex flex-wrap items-center gap-3"><Button disabled={busy} onClick={() => void exportBackup()}>{busy ? <LoaderCircle className="animate-spin" /> : <Download />}导出业务数据备份</Button><span className="text-xs text-muted-foreground">ZIP 文件，包含记录（含回收站）、附件、原文历史、公司、关注名单、兼职与收入、提醒及完成历史、个人背景和简历原文件。不含 AI 对话与评估历史、图标缓存、密钥和运行配置。</span></div>
     </Panel>
     <Panel title="从备份恢复" description="只新增不存在的记录。已有的同 ID 记录保持不变，不会被覆盖。">
       <input ref={input} type="file" accept=".zip" hidden onChange={e => { const f = e.target.files?.[0]; if (f) void readBackup(f); e.target.value = ""; }} />
