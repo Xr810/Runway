@@ -147,7 +147,8 @@ export function DeskProvider({ children }: { children: ReactNode }) {
     const lifecycle = new AbortController();
     context.registerTool({ name: "filter_opportunities", description: "Filter the visible job, project or competition list without changing saved records.", inputSchema: { type: "object", properties: { kind: { type: "string", enum: ["job", "competition", "project"] }, query: { type: "string" } }, required: ["kind"], additionalProperties: false }, annotations: { readOnlyHint: true, untrustedContentHint: true },
       execute(input: unknown) { const v = input as { kind: string; query?: string }; if (!v || !["job", "competition", "project"].includes(v.kind) || v.query !== undefined && typeof v.query !== "string") throw Error("Invalid filter");
-        router.push((v.kind === "job" ? "/jobs" : "/projects") + (v.query ? "?q=" + encodeURIComponent(v.query) : "")); return { kind: v.kind, query: v.query || "" }; } }, { signal: lifecycle.signal }).catch(() => {});
+        const params = new URLSearchParams(); if (v.query) params.set("q", v.query); if (v.kind !== "job") params.set("kind", v.kind);
+        router.push((v.kind === "job" ? "/jobs" : "/projects") + (params.size ? "?" + params.toString() : "")); return { kind: v.kind, query: v.query || "" }; } }, { signal: lifecycle.signal }).catch(() => {});
     return () => lifecycle.abort();
   }, [router]);
 

@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { ArrowDownUp, BriefcaseBusiness, Columns3, FileCheck2, FileText, Flag, List, ListFilter, Plus, Search, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Entry, closed, companyTypes, dayDiff, employmentTypes, regions, schedules, score, workModes } from "@/lib/model";
-import { matchesAiFilter } from "@/lib/ai-contract";
+import { entriesForAiSurface } from "@/lib/ai-contract";
 import { isApplied } from "@/lib/journey";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,8 +51,8 @@ export default function JobsView() {
   const [linkedQuery, setLinkedQuery] = useState(params.get("q"));
   if (params.get("q") !== linkedQuery) { setLinkedQuery(params.get("q")); setQuery(params.get("q") || ""); }
 
-  const pool = useMemo(() => data.entries.filter(e => aiFilter?.kind === "all" ? true : e.kind === "job"), [data.entries, aiFilter]);
-  const base = useMemo(() => pool.filter(e => (!aiFilter || (aiFilter.ids ? aiFilter.ids.includes(e.id) : matchesAiFilter(e, aiFilter)))
+  const pool = useMemo(() => entriesForAiSurface(data.entries, "jobs", null), [data.entries]);
+  const base = useMemo(() => entriesForAiSurface(pool, "jobs", aiFilter).filter(e => (!aiFilter || !aiFilter.ids || aiFilter.ids.includes(e.id))
     && attributes.every(a => !filters[a.key] || e[a.key] === filters[a.key])
     && (!query || [e.title, e.organization, e.notes, e.location, e.nextAction, e.summary, e.applicationChannel].join(" ").toLowerCase().includes(query.toLowerCase()))), [pool, aiFilter, filters, query]);
   const counts = useMemo(() => Object.fromEntries(jobStages.map(s => [s.key, base.filter(e => stageOf(e.status)?.key === s.key).length])) as Record<StageKey, number>, [base]);

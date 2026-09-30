@@ -31,6 +31,16 @@ before(async () => {
 });
 after(() => pool.end());
 
+test("status patches clear stale next actions for terminal stages", async () => {
+  let entry = (await create({ nextAction: "跟进申请" })).entry;
+  entry = await patchEntry(entry.id, entry.revision, { status: "未通过" });
+  assert.equal(entry.nextAction, "");
+  entry = await patchEntry(entry.id, entry.revision, { status: "已投递" });
+  assert.equal(entry.nextAction, "跟进申请");
+  entry = await patchEntry(entry.id, entry.revision, { status: "放弃", nextAction: "记录拒绝原因" });
+  assert.equal(entry.nextAction, "记录拒绝原因");
+});
+
 for (const key of weightKeys) test(`manual ${key}: insert, edit, clear, and in-flight completion remain protected`, async () => {
   const inserted = (await create({ [key]: 9 })).entry;
   const locked = async (id: string) => (await pool.query("SELECT locked FROM enrichment_state WHERE kind='job' AND target_id=$1", [id])).rows[0]?.locked;

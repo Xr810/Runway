@@ -24,6 +24,18 @@ test("all editable entry fields are accepted, system fields and unknown fields r
   assert.throws(() => one({ module: "entry", operation: "delete", targetId: "missing" }));
   assert.equal(body(one({ module: "entry", operation: "restore", targetId: "deleted" })).action, "undelete");
 });
+test("changing a job status refreshes the default next action unless explicitly supplied", () => {
+  const changed = body(one({ module: "entry", operation: "update", targetId: job.id, fields: { status: "已投递" } })).entry;
+  assert.equal(changed.status, "已投递");
+  assert.equal(changed.nextAction, "跟进申请");
+  const custom = body(one({ module: "entry", operation: "update", targetId: job.id, fields: { status: "已投递", nextAction: "等待 HR 回复" } })).entry;
+  assert.equal(custom.nextAction, "等待 HR 回复");
+});
+test("terminal job statuses have no default next action", async () => {
+  const { defaultNextAction } = await import("../../lib/model");
+  assert.equal(defaultNextAction("未通过"), "");
+  assert.equal(defaultNextAction("放弃"), "");
+});
 test("nested edits preserve other data and use the parent revision", () => {
   const added = body(one({ module: "appointment", operation: "add", targetId: job.id, fields: { title: "Interview", type: "interview", startsAt: "2026-10-01T14:00:00+08:00" } })).entry;
   assert.equal(added.appointments.length, 1); assert(added.appointments[0].id); assert.equal(added.jd, job.jd); assert.equal(added.revision, 5);

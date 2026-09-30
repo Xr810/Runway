@@ -4,9 +4,9 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { blankEntry, entrySchema, progressSchema, today } from "../../lib/model";
 import { allChannels, groupCompanies, heatmapDays, isApplied, timelineEvents } from "../../lib/journey";
-import { aiFilterSchema, aiRequestSchema, matchesAiFilter, prepareAiReply, validImageData } from "../../lib/ai-contract";
+import { aiFilterSchema, aiRequestSchema, entriesForAiSurface, matchesAiFilter, prepareAiReply, validImageData } from "../../lib/ai-contract";
 import { appointmentSchema } from "../../lib/appointments";
-import { canonicalUrl, guardStatus, integrationEventSchema } from "../../lib/integration-contract";
+import { canonicalUrl, guardStatus, integrationEventSchema, normalizeJobStatusPatch } from "../../lib/integration-contract";
 import { blankWatch } from "../../lib/watches";
 
 const existing = { ...blankEntry("job"), title: "Quant intern", organization: "Example", region: "中国香港", deadline: "2026-10-03", revision: 3, jd: "Original full text", jdStatus: "complete" as const, extra: { preserved: true } };
@@ -18,6 +18,18 @@ test("filters are deterministic and computed by code", () => {
   for (const patch of [{ deadline: "" }, { deadline: "2026-10-08" }, { status: "已投递" }, { region: "中国内地" }, { title: "Marketing intern" }, { kind: "competition" as const }]) assert(!matchesAiFilter({ ...existing, ...patch }, filter));
   const result = prepareAiReply(reply({ filter }), [existing, { ...existing, id: "other", status: "已投递" }], [], "m");
   assert.deepEqual(result.matchIds, [existing.id]); assert.equal(result.matchCount, 1);
+});
+test("integration status patches refresh terminal next actions without overriding custom text", () => {
+  assert.equal(normalizeJobStatusPatch({ status: "未通过", nextAction: "跟进申请" }).nextAction, "跟进申请");
+  assert.equal(normalizeJobStatusPatch({ status: "未通过" }).nextAction, "");
+  assert.equal(normalizeJobStatusPatch({ status: "已投递" }).nextAction, "跟进申请");
+});
+test("AI filters cannot cross the record-type boundary of a page", () => {
+  const project = { ...blankEntry("project"), id: "project-1", title: "Side project" };
+  const competition = { ...blankEntry("competition"), id: "competition-1", title: "Hackathon" };
+  const all = aiFilterSchema.parse({ label: "全部机会", kind: "all" });
+  assert.deepEqual(entriesForAiSurface([existing, project, competition], "jobs", all).map(e => e.id), [existing.id]);
+  assert.deepEqual(entriesForAiSurface([existing, project, competition], "tracks", all).map(e => e.id), [project.id, competition.id]);
 });
 test("drafts cannot set protected fields and flag duplicates", () => {
   const add = prepareAiReply(reply({ drafts: [{ operation: "add", fields: { title: "Quant intern", organization: "Example", id: existing.id, revision: 99, extra: { hacked: true }, jdStatus: "complete", jd: "Screenshot fragment" }, sourceImageIds: ["image-1", "not-sent"] }] }), [existing], ["image-1"], "m").drafts[0];

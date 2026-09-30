@@ -30,7 +30,7 @@ export function shouldSearchWeb(text: string) {
     && /(?:补|填|更|修|完善|获取|找)/i.test(command)) return false;
   if (/不要.*(?:联网|搜索)|不用.*(?:联网|搜索)|do not search|don't search/i.test(command)) return false;
   // Local records and paid surveys are not requests to disclose a message to a search engine.
-  if (/(?:查询|查找|查看|搜索|搜一下|查一下).*(?:我的|已保存|已投递|工作台|收款记录|收入记录)|调查|提醒我|search (?:my|saved)|research intern/i.test(command)
+  if (/(?:查询|查找|查看|搜索|搜一下|查一下).*(?:我的|已保存|已投递|工作台|收款记录|收入记录|岗位|职位|项目|比赛|提醒|记录)|调查|提醒我|search (?:my|saved)|research intern/i.test(command)
     && !/联网|网上|全网|web\s*search|websearch|search (?:the )?web/i.test(command)) return false;
   return query.length >= 2 && /搜一下|搜索|搜一搜|查一下|查找.*(?:公司|官网|招聘)|联网|网上查|全网|最新.*(?:新闻|招聘|岗位|消息)|(?:公司|企业).*官网|\b(?:search|look\s*up|web\s*search|websearch)\b/i.test(command);
 }

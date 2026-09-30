@@ -77,7 +77,7 @@ function containsPastedSource(text: string) {
 export async function askAi(input: z.infer<typeof aiRequestSchema>, entries: Entry[], context: AiContext & { profile: EvaluationProfile; pages: PageResult[]; search?: WebSearch; read?: (request: AgentRead) => Promise<unknown> }, signal?: AbortSignal, config?: AiConfig) {
   const { base, key, model } = config ?? await getAiConfig();
   if (!base || !key || !model) throw Error("AI 尚未配置，请到设置中填写模型。");
-  if (context.search?.note && !context.pages.some(p => p.page) && !input.images.length) return unavailableLinkReply(model, context.pages, context.search.note);
+  if (context.search?.note && context.search.status !== "skipped" && !context.pages.some(p => p.page) && !input.images.length) return unavailableLinkReply(model, context.pages, context.search.note);
   if (context.pages.length && context.pages.every(p => !p.page) && !input.images.length && !containsPastedSource(input.messages.at(-1)?.text ?? "")) return unavailableLinkReply(model, context.pages);
   const system = `${agentCapabilityPrompt}
 今天${today()}，时区Asia/Singapore。当前页面${input.page ?? "/"}，选中记录${input.selectedEntryId ?? "无"}，工作区${input.workspace ?? "desk"}。

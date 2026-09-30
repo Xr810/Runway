@@ -3,7 +3,7 @@ import {pool,locks} from "./postgres";
 import {notify} from "./notifications";
 import {syncEnrichment} from "./enrichment";
 import {blankEntry,entrySchema,type Entry} from "./model";
-import {type IntegrationEvent,IntegrationError,canonicalUrl,changedFields,guardStatus,validateJob} from "./integration-contract";
+import {type IntegrationEvent,IntegrationError,canonicalUrl,changedFields,guardStatus,normalizeJobStatusPatch,validateJob} from "./integration-contract";
 const hash=(value:string)=>createHash("sha256").update(value).digest("hex");
 export type IntegrationClient={id:string;name:string};
 export async function authenticateIntegration(request:Request):Promise<IntegrationClient>{
@@ -54,7 +54,7 @@ export async function applyIntegrationEvent(actor:IntegrationClient,event:Integr
     guardStatus(before,event.patch.status);
     const appointments=event.appointment?[...before.appointments.filter(item=>item.id!==event.appointment!.id),event.appointment]:before.appointments;
     const notes=event.note?`${before.notes}${before.notes?"\n\n":""}[${actor.name} · ${event.source.occurredAt}] ${event.note}`:before.notes;
-    entry=validateJob({...before,...event.patch,appointments,notes,revision:before.revision+1,...(event.patch.jd!==undefined&&event.patch.jd!==before.jd?{jdStatus:event.patch.jd||event.patch.summary||before.summary?"partial":"missing"}:{})});
+    entry=validateJob({...before,...normalizeJobStatusPatch(event.patch),appointments,notes,revision:before.revision+1,...(event.patch.jd!==undefined&&event.patch.jd!==before.jd?{jdStatus:event.patch.jd||event.patch.summary||before.summary?"partial":"missing"}:{})});
     if(event.patch.jd!==undefined&&event.patch.jd!==before.jd){entry.jdStatus=entry.jd?"partial":entry.summary?"partial":"missing";entry.jdSavedAt=entry.jd?now:"";await client.query("INSERT INTO versions(id,entry_id,data,created) VALUES($1,$2,$3,$4)",[randomUUID(),entry.id,JSON.stringify({jd:before.jd,jdStatus:before.jdStatus,jdSavedAt:before.jdSavedAt,summary:before.summary,url:before.url}),now]);}
     if(!changedFields(before,entry).length)throw new IntegrationError(400,"no_changes","未产生变更，可使用 notify 记录消息");
     await client.query("UPDATE entries SET data=$1,revision=$2,updated=$3 WHERE id=$4",[JSON.stringify(entry),entry.revision,now,entry.id]);

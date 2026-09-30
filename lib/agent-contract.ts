@@ -62,7 +62,9 @@ export function prepareAgentActions(raw: unknown[], s: AgentSnapshot): AgentDraf
       const old = requireItem((a.operation === "restore" ? s.deleted : s.entries).find(e => e.id === a.targetId));
       if (a.operation !== "update") return draft((a.operation === "delete" ? "移至回收站：" : "恢复：") + old.title, "/api/desk", { action: a.operation === "delete" ? "delete" : "undelete", id: old.id, revision: old.revision });
       const patch = entryAgentFields.parse(a.fields);
-      const next = entrySchema.parse({ ...old, ...patch });
+      const nextCandidate = { ...old, ...patch };
+      if (patch.status !== undefined && patch.nextAction === undefined && nextCandidate.kind === "job") nextCandidate.nextAction = defaultNextAction(nextCandidate.status);
+      const next = entrySchema.parse(nextCandidate);
       return { ...draft("修改：" + old.title, "/api/desk", { action: "save", entry: next }, changes(old, next, Object.keys(patch))), sourceImageIds: a.sourceImageIds };
     }
     if (a.module === "appointment" || a.module === "progress") {
@@ -149,5 +151,5 @@ export function prepareAgentActions(raw: unknown[], s: AgentSnapshot): AgentDraf
   });
 }
 
-export const agentReadSchema = z.object({ module: z.enum(["entries", "deleted", "directory", "gigs", "watches", "reminders", "profile", "settings", "notifications", "evaluations", "versions", "files", "brief", "scan", "companyCompletion", "capabilities"]), kind: z.enum(["job", "company", "channel"]).optional(), before: z.string().regex(/^\d+$/).optional(), id: z.string().max(2000).optional(), query: z.string().max(200).optional(), offset: z.number().int().min(0).max(1000000).default(0) }).strict();
+export const agentReadSchema = z.object({ module: z.enum(["entries", "deleted", "directory", "gigs", "watches", "reminders", "profile", "settings", "notifications", "evaluations", "versions", "files", "brief", "scan", "companyCompletion", "capabilities"]), kind: z.enum(["job", "company", "channel"]).optional(), before: z.string().regex(/^\d+$/).optional(), day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), id: z.string().max(2000).optional(), itemId: z.string().max(2000).optional(), query: z.string().max(200).optional(), offset: z.number().int().min(0).max(1000000).default(0) }).strict();
 export type AgentRead = z.infer<typeof agentReadSchema>;

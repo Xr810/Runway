@@ -99,6 +99,7 @@ export function completeCompanies(options: { names?: string[]; force?: boolean; 
           feed=await enrichmentFeed();
         }
         if (options.refreshLogo && !website) throw Error("没有找到可确认的官网，无法更新图标。");
+        if (!website) throw Error("没有找到可确认的官网，无法完成公司资料补全。");
         const unverified = companyJobs.filter(j => j.companyType === "待核实");
         if (unverified.length) {
           const type = await classify(name, website, signal);

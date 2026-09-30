@@ -8,6 +8,8 @@ test("Tavily search only runs for explicit web-search intent", () => {
   assert.equal(shouldSearchWeb("这个链接是什么岗位 https://example.com/job"), false);
   assert.equal(shouldSearchWeb("每天 8 点提醒我挖因子"), false);
   assert.equal(shouldSearchWeb("帮我把公司的图标都补上,你可以websearch"), false);
+  assert.equal(shouldSearchWeb("搜索岗位"), false);
+  assert.equal(shouldSearchWeb("查找我的项目"), false);
 });
 
 test("search query removes invocation words before sending it upstream", () => {

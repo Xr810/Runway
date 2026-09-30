@@ -29,6 +29,10 @@ test("unrelated questions keep the model's normal response", () => {
   assert.equal(routeCompanyLogoCompletion(reply, snapshot, "帮我搜索 Example 的官网"), reply);
 });
 
+test("read-only company questions never create a completion action", () => {
+  assert.equal(routeCompanyLogoCompletion(reply, snapshot, "只查看 Example 的公司资料，不要修改"), reply);
+});
+
 test("named company logo refresh is targeted and replaces stale cached marks",()=>{
   const richer={...snapshot,directory:{...snapshot.directory,companies:[...snapshot.directory.companies,{name:"M-Labs",website:"https://m-labs.hk",logoUrl:""},{name:"Oliver Wyman",website:"https://www.oliverwyman.com",logoUrl:""}]}};
   const result=routeCompanyLogoCompletion(reply,richer,"Mlabs图标依旧不对，重新获取");
@@ -39,4 +43,13 @@ test("named company logo refresh is targeted and replaces stale cached marks",()
   assert.match(oliver.reply,/Oliver Wyman/);
   const repeated=routeCompanyLogoCompletion(reply,richer,"Oliver和Goldman公司补全没有生效");
   assert.deepEqual(repeated.actions?.[0].body,{names:["Goldman Sachs","Oliver Wyman"],refreshLogo:false});
+});
+
+test("a shared company word is not treated as a unique alias", () => {
+  const richer = { ...snapshot, directory: { ...snapshot.directory, companies: [
+    { name: "Acme Research", website: "", logoUrl: "" },
+    { name: "Beta Research", website: "", logoUrl: "" },
+  ] } };
+  const result = routeCompanyLogoCompletion(reply, richer, "Research 图标补全");
+  assert.equal(result, reply);
 });

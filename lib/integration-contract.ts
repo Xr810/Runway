@@ -1,5 +1,5 @@
 import {z} from "zod";
-import {entrySchema,jobStatuses,regions,workModes,employmentTypes,schedules,companyTypes,type Entry} from "./model";
+import {defaultNextAction,entrySchema,jobStatuses,regions,workModes,employmentTypes,schedules,companyTypes,type Entry} from "./model";
 import {appointmentSchema} from "./appointments";
 const id=z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/);
 const web=z.string().max(4000).refine(v=>!v||URL.canParse(v)&&/^https?:\/\//i.test(v)&&!new URL(v).username&&!new URL(v).password).default("");
@@ -14,6 +14,11 @@ export const integrationEventSchema=z.discriminatedUnion("action",[
 ]);
 export type IntegrationEvent=z.infer<typeof integrationEventSchema>;
 export class IntegrationError extends Error{constructor(public status:number,public code:string,message:string,public details?:unknown){super(message)}}
+export function normalizeJobStatusPatch(patch: Record<string, unknown>) {
+ const normalized={...patch};
+ if(typeof normalized.status === "string" && normalized.nextAction === undefined) normalized.nextAction=defaultNextAction(normalized.status);
+ return normalized;
+}
 export function validateJob(value:unknown){const result=entrySchema.safeParse(value);if(!result.success)throw new IntegrationError(400,"invalid_entry",result.error.issues[0].message);return result.data;}
 export function canonicalUrl(value:string){try{const url=new URL(value);url.hash="";for(const key of [...url.searchParams.keys()])if(key.startsWith("utm_")||["gclid","fbclid"].includes(key))url.searchParams.delete(key);url.searchParams.sort();url.pathname=url.pathname.replace(/\/$/,"")||"/";return url.toString();}catch{return value}}
 export function guardStatus(old:Entry,status:string|undefined){

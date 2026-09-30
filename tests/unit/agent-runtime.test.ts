@@ -4,7 +4,7 @@ import { MemorySaver, Command } from "@langchain/langgraph";
 import { createRunwayGraph } from "../../lib/agent-graph";
 import { runModelGraph } from "../../lib/agent-model-loop";
 import { prepareAgentActions, type AgentSnapshot } from "../../lib/agent-contract";
-import { agentCapabilities } from "../../lib/agent-capabilities";
+import { agentCapabilities, agentCapabilityPrompt } from "../../lib/agent-capabilities";
 import { blankEntry, today } from "../../lib/model";
 import { profileSchema } from "../../lib/enrichment-contract";
 import { newGig } from "../../lib/part-time-contract";
@@ -37,6 +37,13 @@ test("model graph feeds tool results back and enforces a finite read budget", as
   assert.deepEqual(answer,{reply:"ok"});assert.equal(reads,1);
   calls=0;await assert.rejects(runModelGraph([],{call:async()=>{calls++;return '{"reads":[{"module":"entries"}]}';},read:async()=>[],prepare:raw=>raw}),/读取预算/);assert(calls<=12);
 });
+test("agent instructions map application events to structured fields and reserve notes for explicit notes", () => {
+  assert.match(agentCapabilityPrompt, /candidate\/application/);
+  assert.match(agentCapabilityPrompt, /用户明确要求添加备注或提供独立的备注文本时才写notes/);
+  assert.match(agentCapabilityPrompt, /申请人专属.*applicationUrl/);
+  assert.match(agentCapabilityPrompt, /无法确定目标记录.*先询问/);
+});
+
 test("new unified actions cover creation, income, background jobs and historic restore without system-field writes",()=>{
   for(const capabilityModule of ["entry","gig","watch","reminder","payment","assessment","scan","companyCompletion","version"])assert(agentCapabilities.some(c=>c.module===capabilityModule));
   const created=prepareAgentActions([{module:"entry",operation:"add",fields:{title:"New",extra:{custom:"yes"}}},{module:"gig",operation:"add",fields:{title:"Gig"}}],snapshot);

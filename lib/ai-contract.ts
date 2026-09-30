@@ -33,6 +33,12 @@ export function matchesAiFilter(entry: Entry, filter: AiFilter) {
     && (!filter.deadlineTo || !!entry.deadline && entry.deadline <= filter.deadlineTo);
 }
 
+/** Keep a page's record type boundary separate from the AI filter's scope. */
+export function entriesForAiSurface(entries: Entry[], surface: "jobs" | "tracks", filter: AiFilter | null) {
+  const allowed = surface === "jobs" ? new Set<Entry["kind"]>(["job"]) : new Set<Entry["kind"]>(["project", "competition"]);
+  return entries.filter(entry => allowed.has(entry.kind) && (!filter || matchesAiFilter(entry, filter)));
+}
+
 export const aiEnrichmentSchema=z.object({scope:z.enum(["job","brand","all"]),target:z.object({kind:z.enum(["job","company","channel"]),id:z.string().min(1).max(2000)}).strict().nullable().default(null),force:z.boolean().default(false)}).strict();
 export type AiEnrichment=z.infer<typeof aiEnrichmentSchema>;
 const reminderProposal = z.object({
