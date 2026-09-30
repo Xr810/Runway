@@ -1,0 +1,156 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "../vendor/shadcn-tailwind-4.13.0.css";
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility scrollbar-gutter-stable {
+  scrollbar-gutter: stable;
+}
+
+/* Runway design tokens. Components read these through the Tailwind theme below. */
+:root {
+  --background: #f6f6f3;
+  --foreground: #1b1c1f;
+  --card: #ffffff;
+  --card-foreground: #1b1c1f;
+  --popover: #ffffff;
+  --popover-foreground: #1b1c1f;
+  --primary: #3552d4;
+  --primary-foreground: #ffffff;
+  --secondary: #eeeeea;
+  --secondary-foreground: #1b1c1f;
+  --muted: #efefeb;
+  --muted-foreground: #6a6d74;
+  --accent: #ebeefb;
+  --accent-foreground: #1f2f7a;
+  --destructive: #d23f3a;
+  --border: #e4e4df;
+  --input: #dcdcd6;
+  --ring: #3552d4;
+  --chart-1: #3552d4;
+  --chart-2: #1f9d7a;
+  --chart-3: #d9912b;
+  --chart-4: #c9504b;
+  --chart-5: #8b6bd6;
+  --chart-6: #8d949e;
+  --radius: 0.625rem;
+  --sidebar: #efefeb;
+  --sidebar-foreground: #1b1c1f;
+  --sidebar-primary: #3552d4;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e4e4df;
+  --sidebar-accent-foreground: #1b1c1f;
+  --sidebar-border: #e2e2dc;
+  --sidebar-ring: #3552d4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #111214;
+    --foreground: #ececee;
+    --card: #18191c;
+    --card-foreground: #ececee;
+    --popover: #1c1d21;
+    --popover-foreground: #ececee;
+    --primary: #7d93ff;
+    --primary-foreground: #0f1118;
+    --secondary: #232428;
+    --secondary-foreground: #ececee;
+    --muted: #202125;
+    --muted-foreground: #9b9ea6;
+    --accent: #20263d;
+    --accent-foreground: #c9d2ff;
+    --destructive: #ff6b66;
+    --border: #2a2b30;
+    --input: #33343a;
+    --ring: #7d93ff;
+    --chart-1: #7d93ff;
+    --chart-2: #3cc79e;
+    --chart-3: #f0ad4e;
+    --chart-4: #ff7b76;
+    --chart-5: #b39dff;
+    --chart-6: #8d949e;
+    --sidebar: #0c0d0f;
+    --sidebar-foreground: #ececee;
+    --sidebar-primary: #7d93ff;
+    --sidebar-primary-foreground: #0f1118;
+    --sidebar-accent: #1d1e22;
+    --sidebar-accent-foreground: #ececee;
+    --sidebar-border: #222327;
+    --sidebar-ring: #7d93ff;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-size: 14px;
+    line-height: 1.5;
+    font-feature-settings: "cv11", "ss01";
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
