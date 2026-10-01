@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+step() {
+  local label="$1"
+  shift
+  local started=$SECONDS
+  printf '\n==> %s\n' "$label"
+  "$@"
+  printf '    completed in %ss\n' "$((SECONDS - started))"
+}
+
+install_postgres() {
+  if command -v psql >/dev/null && [[ "$(psql --version)" == *" 17."* ]]; then
+    echo "PostgreSQL 17 is already installed"
+    return
+  fi
+
+  sudo env DEBIAN_FRONTEND=noninteractive apt-get update
+  sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl
+  sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
+  curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+  # shellcheck disable=SC1091
+  source /etc/os-release
+  echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+    | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+  sudo env DEBIAN_FRONTEND=noninteractive apt-get update
+  sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-17
+}
+
+configure_postgres() {
+  if ! sudo pg_lsclusters --no-header | awk '$1 == "17" && $2 == "main" { found=1 } END { exit !found }'; then
+    sudo pg_createcluster 17 main
+  fi
+
+  local tuning=/etc/postgresql/17/main/conf.d/amp-orb.conf
+  local desired
+  desired=$'fsync = off\nsynchronous_commit = off\nfull_page_writes = off'
+  if [[ ! -f "$tuning" ]] || [[ "$(sudo cat "$tuning")" != "$desired" ]]; then
+    printf '%s\n' "$desired" | sudo tee "$tuning" >/dev/null
+    sudo systemctl restart postgresql
+  fi
+  sudo systemctl enable --now postgresql
+
+  local role
+  role="$(id -un)"
+  if [[ ! "$role" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+    echo "Unsupported local PostgreSQL role name: $role" >&2
+    return 1
+  fi
+  if [[ "$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname = '$role'")" != "1" ]]; then
+    sudo -u postgres createuser --login "$role"
+  fi
+  if [[ "$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname = 'runway'")" != "1" ]]; then
+    sudo -u postgres createdb --owner "$role" runway
+  fi
+}
+
+install_dependencies() {
+  local marker=node_modules/.amp-dependencies.sha256
+  local expected
+  expected="$({ sha256sum package.json package-lock.json; node -p 'process.versions.modules'; npm --version; } | sha256sum | cut -d' ' -f1)"
+  if [[ -d node_modules ]] && [[ "$(cat "$marker" 2>/dev/null || true)" == "$expected" ]]; then
+    echo "Locked npm dependencies are already installed"
+    return
+  fi
+  npm ci
+  printf '%s\n' "$expected" >"$marker"
+}
+
+write_local_env() {
+  mkdir -p data/attachments
+  if [[ -f .env.local ]]; then
+    echo ".env.local already exists; leaving it unchanged"
+    return
+  fi
+
+  local session_secret settings_key password_hash
+  session_secret="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))")"
+  settings_key="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))")"
+  password_hash="$(node -e "const {randomBytes,scryptSync}=require('node:crypto');const salt=randomBytes(16).toString('hex');console.log(salt+':'+scryptSync('runway-orb-dev',salt,64).toString('hex'))")"
+  cat >.env.local <<EOF
+DATABASE_URL=postgresql:///runway?host=/var/run/postgresql
+APP_ORIGIN=http://localhost:3000
+SESSION_SECRET=$session_secret
+AI_SETTINGS_KEY=$settings_key
+LOGIN_PASSWORD_HASH=$password_hash
+ATTACHMENTS_DIR=./data/attachments
+SCHEDULER=off
+AI_BASE_URL=
+AI_API_KEY=
+AI_MODEL=
+TAVILY_API_KEY=
+EOF
+  echo "Created .env.local for orb development (login: runway-orb-dev)"
+}
+
+check_node() {
+  command -v node >/dev/null || { echo "Node.js 22.13 or newer is required" >&2; return 1; }
+  node -e "const [major,minor]=process.versions.node.split('.').map(Number);if(major<22||(major===22&&minor<13))process.exit(1)" \
+    || { echo "Node.js 22.13 or newer is required; found $(node --version)" >&2; return 1; }
+  echo "Using Node.js $(node --version) and npm $(npm --version)"
+}
+
+step "Checking the Node.js toolchain" check_node
+step "Installing PostgreSQL 17" install_postgres
+step "Configuring the local PostgreSQL database" configure_postgres
+step "Installing locked npm dependencies" install_dependencies
+step "Preparing the local environment" write_local_env
+step "Applying database migrations" node --env-file=.env.local scripts/migrate.mjs
+
+printf '\nOrb setup complete. Run `amp orb services ensure` to start the application.\n'
