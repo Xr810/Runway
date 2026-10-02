@@ -249,6 +249,77 @@ test("accounts isolate entries, exports, attachments, AI settings and integratio
   const downloaded = await call(`/api/desk?file=${uploaded.body.id}`);
   assert.equal(downloaded.status, 200); assert.equal(downloaded.body, "private attachment A");
 });
+test("save and patch reject ambiguous current recruitment rounds", async () => {
+  active = "a";
+  const stages = ["first", "second"].map(id => ({ id, title: id, type: "assessment", startsAt: "" }));
+  const invalid = await call("/api/desk", { method: "POST", body: { action: "save", entry: entry({ appointments: stages }) } });
+  assert.equal(invalid.status, 400);
+  assert.match(invalid.body.error, /当前招聘阶段/);
+  const saved = await create({ title: "[test] stage uniqueness", appointments: [{ ...stages[0], stageState: "superseded" }, stages[1]] });
+  const patched = await call("/api/desk", { method: "POST", body: { action: "patch", id: saved.id, revision: saved.revision, patch: { appointments: stages } } });
+  assert.equal(patched.status, 400);
+  assert.match(patched.body.error, /当前招聘阶段/);
+  assert.equal((await call(`/api/desk?entry=${saved.id}`)).body.entry.appointments[0].stageState, "superseded");
+});
+test("attachment upload and backup restore cannot cross account boundaries", async () => {
+  active = "a";
+  const aEntry = await create({ title: "[test] restore isolation A", jd: "A original" });
+  const updated = await call("/api/desk", { method: "POST", body: { action: "save", entry: { ...aEntry, jd: "A current" } } });
+  assert.equal(updated.status, 200, JSON.stringify(updated.body));
+  const aUpload = new FormData();
+  aUpload.append("entryId", aEntry.id); aUpload.append("file", new File(["A restore attachment"], "restore-a.txt", { type: "text/plain" }));
+  const uploaded = await call("/api/desk", { method: "POST", form: aUpload });
+  assert.equal(uploaded.status, 200, JSON.stringify(uploaded.body));
+  const backup = await call("/api/desk?export=1");
+  const aVersion = backup.body.versions.find(v => v.entry_id === aEntry.id);
+  assert(aVersion, "account A export should contain its version history");
+
+  active = "b";
+  const bEntry = await create({ title: "[test] restore isolation B" });
+  const foreignTarget = new FormData();
+  foreignTarget.append("entryId", aEntry.id); foreignTarget.append("file", new File(["B must not attach this"], "foreign.txt"));
+  assert.equal((await call("/api/desk", { method: "POST", form: foreignTarget })).status, 404);
+
+  const foreignRestore = await call("/api/desk", { method: "POST", body: { action: "restore", entry: backup.body.entries.find(e => e.id === aEntry.id) } });
+  assert.notEqual(foreignRestore.status, 200, "account B must not claim or overwrite account A's entry ID");
+  assert.equal((await call("/api/desk", { method: "POST", body: { action: "restoreVersions", versions: [aVersion] } })).status, 200);
+  assert(!(await call(`/api/desk?entry=${bEntry.id}`)).body.versions.some(v => v.id === aVersion.id));
+
+  const restoredId = randomUUID(), bUpload = new FormData();
+  bUpload.append("entryId", bEntry.id); bUpload.append("restoreId", restoredId); bUpload.append("created", "2026-01-02T03:04:05.000Z");
+  bUpload.append("file", new File(["B restored attachment"], "restore-b.txt", { type: "text/plain" }));
+  assert.equal((await call("/api/desk", { method: "POST", form: bUpload })).status, 200);
+  assert.equal((await call(`/api/desk?file=${restoredId}`)).body, "B restored attachment");
+
+  active = "a";
+  const stillA = await call(`/api/desk?entry=${aEntry.id}`);
+  assert.equal(stillA.status, 200); assert.equal(stillA.body.entry.jd, "A current");
+  assert(stillA.body.versions.some(v => v.id === aVersion.id));
+  assert.equal((await call(`/api/desk?file=${uploaded.body.id}`)).body, "A restore attachment");
+  const finalAExport = await call("/api/desk?export=1");
+  assert(!finalAExport.body.entries.some(e => e.id === bEntry.id));
+  assert(!finalAExport.body.files.some(f => f.id === restoredId));
+});
+test("AI run reads, listings and operations are isolated by account", async () => {
+  active = "a";
+  const proposed = await call("/api/ai", { method: "POST", body: { messages: [{ role: "user", text: "每天10点提醒我检查隔离测试" }], images: [] } });
+  assert.equal(proposed.status, 200, JSON.stringify(proposed.body));
+  const { runId } = proposed.body;
+  assert((await call("/api/ai?runs=1")).body.runs.some(r => r.id === runId));
+
+  active = "b";
+  const bRuns = await call("/api/ai?runs=1");
+  assert.equal(bRuns.status, 200); assert(!bRuns.body.runs.some(r => r.id === runId));
+  const endpoint = `/api/ai/runs/${runId}`;
+  assert.equal((await call(endpoint)).status, 404);
+  assert.equal((await call(endpoint, { method: "POST", body: { action: "recover" } })).status, 404);
+  assert.equal((await call(endpoint, { method: "POST", body: { action: "decide", decision: { proposalId: proposed.body.actions[0].id, approved: false } } })).status, 404);
+
+  active = "a";
+  const unchanged = await call(endpoint);
+  assert.equal(unchanged.status, 200); assert.equal(unchanged.body.runId, runId);
+  assert.deepEqual(unchanged.body.outcomes, {});
+});
 test("signing out everywhere invalidates existing sessions", async () => {
   active = "a";
   const old = accounts.a.cookie;

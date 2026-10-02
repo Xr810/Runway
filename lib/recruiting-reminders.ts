@@ -18,12 +18,13 @@ export function recruitingReminders(entries: Entry[], preferences: ReminderPrefe
   const result: RecruitingReminder[] = [];
   for (const entry of entries) {
     if (entry.kind !== "job" || terminal.has(entry.status) || entry.followUp) continue;
-    const current = entry.appointments.filter(stage => stage.stageState === "current" && stage.status !== "cancelled");
+    const stages = entry.appointments.filter(stage => stage.type !== "followup");
+    const current = stages.filter(stage => stage.stageState === "current");
     const enabled = entry.applicationRemindersEnabled ?? preferences.application.enabled;
     const days = entry.applicationReminderDays ?? preferences.application.days;
-    if (enabled && entry.applied && current.length === 0 && entry.status === "已投递") result.push(reminder(entry, null, "application", addCalendarDays(entry.applied, days)));
-    const latestStage = current.toSorted((a, b) => b.startsAt.localeCompare(a.startsAt))[0];
-    for (const stage of latestStage ? [latestStage] : []) {
+    if (enabled && entry.applied && stages.length === 0 && entry.status === "已投递") result.push(reminder(entry, null, "application", addCalendarDays(entry.applied, days)));
+    // Reject ambiguous imported state rather than guessing a round from dates.
+    for (const stage of current.length === 1 ? current : []) {
       if (!isCandidate(stage)) continue;
       const pref = stage.type === "assessment" ? preferences.assessment : preferences.interview;
       if (!(stage.remindersEnabled ?? pref.enabled)) continue;

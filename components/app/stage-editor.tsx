@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 const local = (value: string) => value ? `${appointmentDate(value)}T${appointmentTime(value)}` : "";
 const iso = (value: string) => value ? new Date(value + ":00+08:00").toISOString() : "";
 export function StageEditor({ value, onChange }: { value: Appointment[]; onChange: (value: Appointment[]) => void }) {
-  const patch = (id: string, change: Partial<Appointment>) => onChange(value.map(item => item.id === id ? { ...item, ...change } : item));
+  const patch = (id: string, change: Partial<Appointment>) => onChange(value.map(item => item.id === id ? { ...item, ...change } : change.stageState === "current" && item.type !== "followup" ? { ...item, stageState: "superseded" } : item));
   const add = (type: "assessment" | "interview") => onChange([
     ...value.map(item => item.stageState === "current" ? { ...item, stageState: "superseded" as const } : item),
     { id: crypto.randomUUID(), title: type === "assessment" ? "测评" : "面试", type, startsAt: "", location: "", url: "", status: "scheduled", receivedDate: "", deadlineDate: "", completedAt: "", response: "pending", stageState: "current", reminderDays: null, remindersEnabled: null, reminderBase: null },

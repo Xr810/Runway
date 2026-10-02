@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { appointmentSchema, stageProgress } from "../../lib/appointments";
-import { blankEntry } from "../../lib/model";
+import { blankEntry, entrySchema } from "../../lib/model";
 import { defaultReminderPreferences, recruitingReminders } from "../../lib/recruiting-reminders";
 import { timelineEvents } from "../../lib/journey";
 
@@ -56,4 +56,28 @@ test("calendar day arithmetic spans leap day and interview offset boundaries", (
   entry.status = "一面";
   entry.appointments = [stage({ startsAt: "2026-09-15T20:00:00-04:00", status: "completed", completedAt: "2026-09-17T01:00:00Z" })];
   assert.equal(recruitingReminders([entry])[0].date, "2026-09-23");
+});
+
+test("current round is explicit, not inferred from dates, and cancelled rounds cannot revive reminders", () => {
+  const entry = job(); entry.status = "已投递"; entry.applied = "2026-09-01";
+  entry.appointments = [stage({ status: "completed", completedAt: "2026-09-11T02:00:00Z" }), stage({ id: "assessment", type: "assessment", startsAt: "" })];
+  assert.equal(entrySchema.safeParse(entry).success, false);
+  assert.deepEqual(recruitingReminders([entry]), []);
+  entry.appointments[0].stageState = "superseded";
+  assert.equal(entrySchema.safeParse(entry).success, true);
+  entry.appointments[1].status = "cancelled";
+  assert.deepEqual(recruitingReminders([entry]), []);
+  entry.appointments[1].stageState = "superseded";
+  assert.deepEqual(recruitingReminders([entry]), []);
+});
+
+test("progress uses separate pending and feedback intervals without inventing unknown dates", () => {
+  const item = stage({ type: "assessment", startsAt: "", receivedDate: "2026-09-10", deadlineDate: "2026-09-15" });
+  assert.equal(stageProgress(item, "2026-09-12").percent, 40);
+  assert.equal(stageProgress({ ...item, deadlineDate: "" }, "2026-09-12").percent, 0);
+  const completed = { ...item, status: "completed" as const, completedAt: "2026-09-13T00:00:00+08:00" };
+  assert.equal(stageProgress(completed, "2026-09-15", "2026-09-20").percent, 29);
+  assert.equal(stageProgress(completed, "2026-09-15").percent, 0);
+  assert.equal(stageProgress({ ...completed, response: "advanced", stageState: "superseded" }, "2026-09-15").label, "已进入下一阶段");
+  assert.equal(stageProgress({ ...item, status: "cancelled" }, "2026-09-15").label, "已取消 / 未参加");
 });

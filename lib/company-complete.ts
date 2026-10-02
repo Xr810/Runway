@@ -16,28 +16,52 @@ import { notify } from "./notifications";
 // Hosts that belong to job boards and applicant-tracking systems, never to the employer itself.
 const recruitingHosts = /(greenhouse\.io|lever\.co|ashbyhq\.com|myworkdayjobs\.com|workday\.com|smartrecruiters\.com|tal\.net|oraclecloud\.com|successfactors|icims\.com|taleo\.net|jobvite\.com|linkedin\.com|indeed\.|jobsdb\.|glassdoor\.|bamboohr\.com|workable\.com|recruitee\.com|teamtailor\.com|mokahr\.com|hotjob\.cn|zhiye\.com|liepin\.com|zhipin\.com|51job\.com|feishu\.cn|lagou\.com|nowcoder\.com|avature\.net|brassring\.com|eightfold\.ai|phenom|hirevue\.com|google\.com)/i;
 const stateKey = "company-completion-v1";
-type Attempt = { at: string; website?: string; note: string; failed?: boolean };
+type Attempt = { at: string; website?: string; evidenceUrl?: string; evidenceReason?: string; note: string; failed?: boolean };
 
 async function attempts(): Promise<Record<string, Attempt>> { const row = (await pool.query("SELECT value FROM meta WHERE key=$1", [stateKey])).rows[0]; return row ? JSON.parse(row.value) : {}; }
 async function remember(id: string, attempt: Attempt) {
   const userId = await currentUserId();
   await pool.query("INSERT INTO meta(user_id,key,value) VALUES($1,$2,$3::jsonb::text) ON CONFLICT(user_id,key) DO UPDATE SET value=(meta.value::jsonb || $3::jsonb)::text", [userId, stateKey, JSON.stringify({ [id]: attempt })]);
 }
-async function findWebsite(name: string, jobs: Entry[], signal: AbortSignal) {
+function officialIdentity(page: ReadablePage, name: string) {
   const normalized = name.toLocaleLowerCase().replace(/[^a-z0-9\p{L}]/gu, "");
-  const confirms = (page: ReadablePage) => (`${page.title}\n${page.text}`).toLocaleLowerCase().replace(/[^a-z0-9\p{L}]/gu, "").includes(normalized);
+  if (!normalized) return null;
+  const compact = (value: string) => value.toLocaleLowerCase().replace(/[^a-z0-9\p{L}]/gu, "");
+  // Third-party job boards also publish JobPosting.organization. Neither that nor
+  // an article title mentioning the employer establishes site ownership.
+  if (recruitingHosts.test(new URL(page.url).hostname)) return null;
+  if (!page.title.split(/[|｜–—:：]/).some(part => compact(part) === normalized)) return null;
+  const origin = new URL(page.url).origin;
+  const firstPartyNavigation = page.links.some(link => {
+    try { return new URL(link.url).origin === origin && compact(link.text).includes(normalized) && /about|careers?|contact|关于|招聘|联系/i.test(link.text); }
+    catch { return false; }
+  });
+  const ownershipText = new RegExp(`(?:©|copyright)[^\\n]{0,80}${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}|${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^\\n]{0,50}(?:official (?:site|website)|官网)`, "i").test(page.text);
+  return firstPartyNavigation || ownershipText ? `页面标题标明 ${name}，并有同站公司导航或官方版权标识` : null;
+}
+
+export async function findWebsite(name: string, jobs: Entry[], signal: AbortSignal) {
+  const verify = async (link: string) => {
+    if (recruitingHosts.test(new URL(link).hostname)) return null;
+    const page = await readPage(link, signal), reason = officialIdentity(page, name);
+    if (!reason) return null;
+    const website = new URL(page.url).origin;
+    // A directory can dedicate an entire page and navigation to one employer.
+    // The site's own homepage must identify the same company as well.
+    const home = new URL(page.url).pathname === "/" ? page : await readPage(website, signal);
+    if (new URL(home.url).origin !== website || !officialIdentity(home, name)) return null;
+    return { website, evidenceUrl: page.url, reason: `${reason}；站点首页亦确认同一公司身份` };
+  };
   for (const job of jobs) for (const link of [job.applicationUrl, job.url, job.companySource]) {
     if (!link) continue;
-    try { const host = new URL(link).hostname; if (!recruitingHosts.test(host)) { const page = await readPage(link, signal); if (confirms(page)) return { website: new URL(page.url).origin, note: "岗位原始页面确认" }; } } catch { /* try the next link */ }
+    try { const found = await verify(link); if (found) return found; } catch { /* try the next link */ }
   }
   const key = (await getAiConfig()).tavilyKey;
   if (!key) return null;
   const results = await searchTavily(`${name} official website company`, key, signal).catch(() => []);
   for (const result of results) {
     try {
-      const url = new URL(result.url); if (recruitingHosts.test(url.hostname)) continue;
-      const page = await readPage(url.href, signal);
-      if (confirms(page)) return { website: new URL(page.url).origin, note: "联网搜索及官网页面确认" };
+      const found = await verify(result.url); if (found) return found;
     } catch { /* an unreadable search result is not evidence */ }
   }
   return null;
@@ -82,6 +106,7 @@ export async function completeCompanies(options: { names?: string[]; force?: boo
     })() && name).slice(0, options.limit ?? 8);
     for (const [id, name] of targets) {
       const notes: string[] = [], companyJobs = jobs.filter(j => identity(j.organization) === id);
+      let evidence: { website: string; evidenceUrl: string; evidenceReason: string } | undefined;
       try {
         let saved = directory.companies.find(c => identity(c.name) === id), website = saved?.website ?? "";
         if (!website) {
@@ -89,9 +114,15 @@ export async function completeCompanies(options: { names?: string[]; force?: boo
           if (found) {
             for (let attempt = 0; attempt < 3; attempt++) {
               try { directory = directorySchema.parse(await saveDirectory({ ...directory, companies: [...directory.companies.filter(c => identity(c.name) !== id), { name: saved?.name ?? name, website: found.website, logoUrl: saved?.logoUrl ?? "" }] })); break; }
-              catch { directory = await getDirectory(); saved = directory.companies.find(c => identity(c.name) === id); }
+              catch {
+                directory = await getDirectory(); saved = directory.companies.find(c => identity(c.name) === id);
+                // A concurrent/manual edit is authoritative; never replace it with discovery.
+                if (saved?.website) break;
+              }
             }
-            website = found.website; notes.push(`官网 ${found.website}（${found.note}）`);
+            website = saved?.website || found.website;
+            if (!saved?.website) evidence = { website: found.website, evidenceUrl: found.evidenceUrl, evidenceReason: found.reason };
+            notes.push(saved?.website ? `保留手动官网 ${saved.website}` : `官网 ${found.website}（依据：${found.reason}；证据：${found.evidenceUrl}）`);
           } else notes.push("没有找到可确认的官网");
         }
         const currentLogo=logo(id)?.result;
@@ -123,8 +154,8 @@ export async function completeCompanies(options: { names?: string[]; force?: boo
           (await listEntries()).some(job => job.kind === "job" && identity(job.organization) === id && job.companyType === "待核实") && "公司类型依据"].filter(Boolean);
         if (missing.length) throw Error(`仍待核实：${missing.join("、")}。${notes.join("；")}`);
         if (notes.some(n => /^官网|^已缓存|^公司类型/.test(n))) done.push(`${name}：${notes.join("；")}`);
-        await remember(id, { at: new Date().toISOString(), website, note: notes.join("；") });
-      } catch (e) { failed++; await remember(id, { at: new Date().toISOString(), failed: true, note: "失败：" + (e as Error).message }); }
+        await remember(id, { ...tried[id], ...evidence, at: new Date().toISOString(), website, failed: undefined, note: notes.join("；") });
+      } catch (e) { failed++; await remember(id, { ...tried[id], ...evidence, at: new Date().toISOString(), failed: true, note: "失败：" + (e as Error).message }); }
     }
         if(options.names){
           const failedNames=new Set(Object.entries(await attempts()).filter(([id,a])=>options.names!.some(name=>identity(name)===id)&&a.failed).map(([id])=>id));

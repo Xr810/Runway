@@ -36,15 +36,16 @@ export function addCalendarDays(date: string, days: number) { const value = new 
 export const stageDueDate = (item: Appointment) => item.type === "assessment" ? item.deadlineDate : appointmentDate(item.startsAt);
 
 export function stageProgress(item: Appointment, day: string, reminderDate?: string) {
-  if (item.status === "cancelled" || item.stageState === "superseded") return { state: "inactive" as const, percent: 100, label: "已结束" };
+  if (item.status === "cancelled") return { state: "inactive" as const, percent: 100, label: "已取消 / 未参加" };
   if (item.response === "advanced") return { state: "advanced" as const, percent: 100, label: "已进入下一阶段" };
   if (item.response === "rejected") return { state: "rejected" as const, percent: 100, label: "未通过" };
+  if (item.stageState === "superseded") return { state: "inactive" as const, percent: 100, label: "已结束" };
   if (item.status === "completed") {
     const base = item.type === "interview" ? appointmentDate(item.startsAt) : appointmentDate(item.completedAt);
-    const end = reminderDate || base;
+    const end = reminderDate || "";
     return { state: "waiting" as const, percent: datePercent(base, end, day), label: reminderDate ? `等待反馈 · ${reminderDate} 跟进` : "已完成，等待反馈" };
   }
-  const start = item.receivedDate || appointmentDate(item.startsAt), end = stageDueDate(item) || start;
+  const start = item.receivedDate, end = stageDueDate(item);
   return { state: "pending" as const, percent: datePercent(start, end, day), label: item.type === "assessment" ? "待完成测评" : "等待面试" };
 }
 function datePercent(start: string, end: string, day: string) { if (!start || !end) return 0; const total = Math.max(1, Date.parse(end + "T00:00:00Z") - Date.parse(start + "T00:00:00Z")); const elapsed = Math.max(0, Date.parse(day + "T00:00:00Z") - Date.parse(start + "T00:00:00Z")); return Math.min(100, Math.round(elapsed / total * 100)); }

@@ -31,7 +31,7 @@ export const entryObject = z.object({
  location:short, url, deadline:date, applied:date, followUp:date, nextAction:short, salary:short, priority:short,
  applicationChannel:z.string().trim().max(100).default(""),applicationUrl:url,
  applicationReminderDays:z.number().int().min(0).max(90).nullable().default(null), applicationRemindersEnabled:z.boolean().nullable().default(null),
- appointments:z.array(appointmentSchema).max(200).default([]).refine(items=>new Set(items.map(item=>item.id)).size===items.length,"日程 ID 不能重复"),
+ appointments:z.array(appointmentSchema).max(200).default([]).refine(items=>new Set(items.map(item=>item.id)).size===items.length,"日程 ID 不能重复").refine(items=>items.filter(item=>item.type!=="followup"&&item.stageState==="current").length<=1,"只能有一个当前招聘阶段"),
  progress:z.array(progressSchema).max(1500).default([]).refine(items=>new Set(items.map(item=>item.id)).size===items.length,"进度记录 ID 不能重复"),
  workMode:option(workModes),employmentType:option(employmentTypes),schedule:option(schedules),companyType:option(companyTypes),companyBasis:short,companySource:url,
  notes:z.string().max(100000).default(""), summary:z.string().max(100000).default(""), jd:z.string().max(300000).default(""),

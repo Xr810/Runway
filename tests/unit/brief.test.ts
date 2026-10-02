@@ -9,7 +9,7 @@ import { loadModule } from "../helpers/load-module";
 
 type LoadedBrief = { generateBrief(day: string): Promise<contract.Brief>; cachedBrief(day: string): Promise<contract.Brief | null> };
 
-function fixture() {
+function fixture(failure?: Error) {
   const entries = [{ ...model.blankEntry("job"), id: "job-1", title: "Original role", organization: "Example", status: "已投递", followUp: "2026-09-30", nextAction: "发送跟进邮件", revision: 1 }];
   const reminders = { reminders: [], today: [] };
   const profile = { targets: ["工程"] };
@@ -34,7 +34,7 @@ function fixture() {
     "./entries": { listEntries: async () => entries },
     "./reminders": { listReminders: async () => reminders },
     "./enrichment": { evaluationProfile: async () => profile },
-    "./ai-client": { AiUnavailable, aiJson: async () => { aiCalls++; throw new AiUnavailable(); } },
+    "./ai-client": { AiUnavailable, aiJson: async () => { aiCalls++; throw failure ?? new AiUnavailable(); } },
     "./ai-config": { getAiConfig: async () => ai },
     "./reminder-preferences": { getReminderPreferences: async () => preferences },
     "./recruiting-reminders": recruiting,
@@ -60,3 +60,15 @@ test("disabled AI uses rule priorities and supplied-day date math", async () => 
   assert.deepEqual(result.items[0], { text: "发送跟进邮件", entryId: "job-1", priority: "high" });
   assert(!JSON.stringify(result).includes("新加坡"));
 });
+
+for (const failure of [new TypeError("fetch failed"), new Error("模型返回的不是有效 JSON"), new Error("模型返回的格式不符合要求")]) {
+  test(`brief falls back when configured AI fails: ${failure.message}`, async () => {
+    const { brief, ai, aiCalls } = fixture(failure);
+    Object.assign(ai, { base: "https://provider.test", key: "private-key", model: "test", enabled: true });
+    const result = await brief.generateBrief("2026-10-01");
+    assert.equal(aiCalls(), 1);
+    assert.deepEqual(result.items, [{ text: "发送跟进邮件", entryId: "job-1", priority: "high" }]);
+    assert.equal((await brief.cachedBrief("2026-10-01"))?.headline, result.headline);
+    assert(!JSON.stringify(result).includes("private-key"));
+  });
+}

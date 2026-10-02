@@ -25,7 +25,7 @@ after(async () => {
   for (const user of [accountA, accountB]) await as(user, () => tx(async client => {
     for (const table of ["checkpoints", "checkpoint_blobs", "checkpoint_writes"])
       await client.query(`DELETE FROM runway_agent.${table}`);
-    for (const table of ["integration_events", "integration_job_refs", "notifications", "versions", "files", "enrichment_results", "enrichment_tasks", "enrichment_state", "entries", "integration_clients", "ai_cache", "meta"])
+    for (const table of ["agent_operations", "agent_jobs", "agent_runs", "integration_events", "integration_job_refs", "notifications", "versions", "files", "enrichment_results", "enrichment_tasks", "enrichment_state", "entries", "integration_clients", "ai_cache", "meta"])
       await client.query(`DELETE FROM ${table}`);
   }));
   await controlPool.query("DELETE FROM auth_sessions WHERE account_id=ANY($1::uuid[])", [[accountA, accountB]]);
@@ -131,4 +131,27 @@ test("AI enablement and personal settings are enforced per user", async () => {
   const disabled = await as(accountB, () => ai.getAiConfig());
   assert.equal(disabled.enabled, false);
   await assert.rejects(as(accountB, () => ai.saveAiConfig({ ...config, enabled: false }, 0)), /不允许/);
+});
+
+test("same company name and directory revision remain independent across accounts", async () => {
+  const { getDirectory, saveDirectory } = await import("../lib/directory-storage");
+  await Promise.all([accountA, accountB].map(user => as(user, async () => {
+    const directory = await getDirectory();
+    await saveDirectory({ ...directory, companies: [{ name: "Same Company", website: user === accountA ? "https://a.example" : "https://b.example", logoUrl: "" }] });
+  })));
+  assert.equal((await as(accountA, getDirectory)).companies[0].website, "https://a.example");
+  assert.equal((await as(accountB, getDirectory)).companies[0].website, "https://b.example");
+});
+
+test("worker queue reads and bulk recovery updates cannot touch another user's jobs", async () => {
+  const runA = randomUUID(), runB = randomUUID(), jobA = randomUUID(), jobB = randomUUID();
+  await Promise.all([[accountA, runA, jobA], [accountB, runB, jobB]].map(([user, run, job]) => as(user, async () => {
+    await pool.query("INSERT INTO agent_runs(id,owner_id,input) VALUES($1,$2,'{}')", [run, user]);
+    await pool.query("INSERT INTO agent_jobs(id,run_id,kind,payload,status) VALUES($1,$2,'brief','{}','running')", [job, run]);
+  })));
+  await as(accountA, () => pool.query("UPDATE agent_jobs SET status='interrupted' WHERE status='running'"));
+  assert.deepEqual((await as(accountA, () => pool.query("SELECT id,status FROM agent_jobs"))).rows, [{ id: jobA, status: "interrupted" }]);
+  assert.deepEqual((await as(accountB, () => pool.query("SELECT id,status FROM agent_jobs"))).rows, [{ id: jobB, status: "running" }]);
+  await assert.rejects(as(accountB, () => pool.query("INSERT INTO agent_jobs(id,run_id,kind,payload) VALUES($1,$2,'brief','{}')", [randomUUID(), runA])), /foreign key/);
+  assert.equal((await as(accountB, () => pool.query("UPDATE agent_jobs SET status='completed' WHERE id=$1", [jobA]))).rowCount, 0);
 });

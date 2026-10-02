@@ -7,7 +7,7 @@ import { timelineEvents } from "./journey";
 import { listEntries } from "./entries";
 import { listReminders } from "./reminders";
 import { evaluationProfile } from "./enrichment";
-import { AiUnavailable, aiJson } from "./ai-client";
+import { aiJson } from "./ai-client";
 import { getAiConfig } from "./ai-config";
 import { getReminderPreferences } from "./reminder-preferences";
 import { recruitingReminders } from "./recruiting-reminders";
@@ -59,7 +59,7 @@ export async function generateBrief(day = today()): Promise<Brief> {
       "未来 7 天：\n" + (events.join("\n") || "无"), "需要处理：\n" + ([...overdue, ...waiting].join("\n") || "无"), "项目与比赛：\n" + (projects.join("\n") || "无"), todo.join("\n"),
       "最近更新：\n" + (notices.map(n => `${n.organization} ${n.title}：${n.summary}`).join("\n") || "无")].filter(Boolean).join("\n\n"),
     briefSchema, { maxTokens: 1200 }) : fallback();
-  } catch (error) { if (!(error instanceof AiUnavailable)) throw error; result = fallback(); }
+  } catch { result = fallback(); }
   const ids = new Set(entries.map(e => e.id));
   const value = { ...result, items: result.items.map(i => ({ ...i, entryId: i.entryId && ids.has(i.entryId) ? i.entryId : null })) };
   const created = new Date().toISOString();
