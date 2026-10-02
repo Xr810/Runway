@@ -14,7 +14,9 @@ export default function LoginForm({ oauthError = false }: { oauthError?: boolean
   return <main className="flex min-h-dvh items-center justify-center bg-background px-4"><div className="w-full max-w-[360px]">
     <div className="mb-8 flex flex-col items-center text-center"><Logo className="size-10 rounded-xl [&_svg]:size-5" /><h1 className="mt-4 text-xl font-semibold tracking-tight">{APP_NAME}</h1><p className="mt-1 text-sm text-muted-foreground">{APP_TAGLINE}</p></div>
     <form className="rounded-xl border bg-card p-6 shadow-sm" onSubmit={async event => {
-      event.preventDefault(); setBusy(true); setError(""); const values = Object.fromEntries(new FormData(event.currentTarget));
+      event.preventDefault(); setError(""); const values = Object.fromEntries(new FormData(event.currentTarget));
+      if (register && values.password !== values.confirmPassword) { setError("两次输入的密码不一致"); return; }
+      setBusy(true);
       try { const response = await fetch("/api/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: register ? "register" : "login", ...values }) }); const data = await response.json(); if (!response.ok) throw Error(data.error); router.replace("/"); router.refresh(); }
       catch (e) { setError((e as Error).message || "登录失败"); setBusy(false); }
     }}>
@@ -22,6 +24,7 @@ export default function LoginForm({ oauthError = false }: { oauthError?: boolean
         {register && <div className="grid gap-1.5"><Label htmlFor="displayName">姓名</Label><Input id="displayName" name="displayName" autoComplete="name" maxLength={100} /></div>}
         <div className="grid gap-1.5"><Label htmlFor="email">邮箱</Label><Input id="email" name="email" type="email" autoComplete="email" required autoFocus maxLength={254} /></div>
         <div className="grid gap-1.5"><Label htmlFor="password">密码</Label><Input id="password" name="password" type="password" autoComplete={register ? "new-password" : "current-password"} required minLength={register ? 10 : undefined} maxLength={1024} /></div>
+        {register && <div className="grid gap-1.5"><Label htmlFor="confirmPassword">确认密码</Label><Input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" required minLength={10} maxLength={1024} /></div>}
       </div>
       {register && <p className="mt-3 text-xs text-muted-foreground">密码至少 10 个字符。当前不验证邮箱，暂不提供密码找回；Google 账户不会按同名邮箱自动合并。</p>}
       {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
