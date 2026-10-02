@@ -1,34 +1,57 @@
 // End-to-end API tests against a running server and its PostgreSQL database.
-//   BASE_URL (default http://localhost:3000), TEST_PASSWORD, DATABASE_URL, and a mock or real AI model.
+//   BASE_URL (default http://localhost:3000), TEST_ORIGIN, DATABASE_URL, and tests/mock-ai.mjs on port 4010.
 //   SCAN_LIVE=1 also runs a real scan against a public Greenhouse board.
 // Records created here are titled "[test] …" and removed at the end.
 import { test, after, before } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
+import path from "node:path";
 import pg from "pg";
 import { zipSync, strToU8 } from "fflate";
 
-const base = process.env.BASE_URL || "http://localhost:3000", origin = new URL(base).origin;
+const base = process.env.BASE_URL || "http://localhost:3000";
+const origin = process.env.TEST_ORIGIN || new URL(base).origin;
+const aiBase = process.env.TEST_AI_BASE_URL || "http://127.0.0.1:4010";
 const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
-let cookie = "";
+const password = "Runway-test-" + randomUUID() + "!";
+const accounts = {
+  a: { email: `runway-api-a-${randomUUID()}@example.test`, name: "API Test A", cookie: "", id: "" },
+  b: { email: `runway-api-b-${randomUUID()}@example.test`, name: "API Test B", cookie: "", id: "" },
+};
+let active = "a";
 const created = { entries: [], reminders: [], watches: [], clients: [] };
 
 async function call(path, { method = "GET", body, form, headers = {}, auth = true } = {}) {
   const response = await fetch(base + path, { method, redirect: "manual",
-    headers: { origin, ...(auth && cookie ? { cookie } : {}), ...(body !== undefined ? { "content-type": "application/json" } : {}), ...headers },
+    headers: { origin, ...(auth && accounts[active].cookie ? { cookie: accounts[active].cookie } : {}), ...(body !== undefined ? { "content-type": "application/json" } : {}), ...headers },
     body: form ?? (body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body)) });
   const type = response.headers.get("content-type") || "";
   return { status: response.status, headers: response.headers, body: type.includes("json") ? await response.json() : await response.text() };
 }
-async function login() {
-  const r = await fetch(base + "/api/auth", { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify({ password: process.env.TEST_PASSWORD }) });
-  assert.equal(r.status, 200, "login failed; set TEST_PASSWORD");
-  cookie = r.headers.get("set-cookie").split(";")[0];
+async function authenticate(who, action = "login") {
+  const account = accounts[who];
+  const r = await fetch(base + "/api/auth", { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify({ action, email: account.email, password, displayName: account.name }) });
+  assert.equal(r.status, 200, `${action} failed for account ${who}: ${await r.text()}`);
+  account.cookie = r.headers.get("set-cookie").split(";")[0];
 }
-const entry = (patch = {}) => ({ id: randomUUID(), kind: "job", title: "[test] Quant Intern", organization: "Test Co", status: "待投递", location: "Hong Kong", url: "", deadline: "", applied: "", followUp: "", nextAction: "", salary: "", priority: "", applicationChannel: "", applicationUrl: "", appointments: [], progress: [], region: "待核实", workMode: "待核实", employmentType: "待核实", schedule: "待核实", companyType: "待核实", companyBasis: "", companySource: "", notes: "", summary: "", jd: "", jdStatus: "missing", jdSavedAt: "", fit: null, career: null, outlook: null, extra: {}, revision: 0, ...patch });
+const entry = (patch = {}) => ({ id: randomUUID(), kind: "job", title: "[test] Quant Intern", organization: "Test Co", status: "待投递", location: "Hong Kong", url: "", deadline: "", applied: "", followUp: "", nextAction: "", salary: "", priority: "", applicationChannel: "", applicationUrl: "", appointments: [], progress: [], workMode: "待核实", employmentType: "待核实", schedule: "待核实", companyType: "待核实", companyBasis: "", companySource: "", notes: "", summary: "", jd: "", jdStatus: "missing", jdSavedAt: "", fit: null, career: null, outlook: null, extra: {}, revision: 0, ...patch });
 async function create(patch) { const e = entry(patch); const r = await call("/api/desk", { method: "POST", body: { action: "save", entry: e } }); assert.equal(r.status, 200, JSON.stringify(r.body)); created.entries.push(e.id); return r.body.entry; }
 
-before(async () => { await db.connect(); await login(); });
+async function configureModel(who, model) {
+  active = who;
+  const current = await call("/api/settings/ai");
+  assert.equal(current.status, 200, JSON.stringify(current.body));
+  const saved = await call("/api/settings/ai", { method: "POST", body: { action: "save", base: aiBase, apiKey: "test-key", model, revision: current.body.revision } });
+  assert.equal(saved.status, 200, `model configuration failed: ${JSON.stringify(saved.body)}`);
+}
+before(async () => {
+  await db.connect();
+  await authenticate("a", "register"); await authenticate("b", "register");
+  for (const account of Object.values(accounts)) account.id = (await db.query("SELECT account_id AS id FROM password_credentials WHERE email=$1", [account.email])).rows[0].id;
+  await db.query("SELECT set_config('runway.user_id',$1,false)", [accounts.a.id]);
+  await configureModel("a", "mock-model-a"); await configureModel("b", "mock-model-b"); active = "a";
+});
 after(async () => {
   for (const id of created.reminders) await db.query("DELETE FROM reminders WHERE id=$1", [id]);
   for (const id of created.watches) { await db.query("DELETE FROM crawl_seen WHERE watch_id=$1", [id]); await db.query("DELETE FROM crawl_runs WHERE watch_id=$1", [id]); await db.query("DELETE FROM company_watches WHERE id=$1", [id]); }
@@ -37,12 +60,33 @@ after(async () => {
   await db.query("DELETE FROM notifications WHERE entry_id = ANY($1) OR title LIKE '[test]%'", [ids]);
   await db.query("DELETE FROM entries WHERE id = ANY($1)", [ids]);
   for (const id of created.clients) { await db.query("DELETE FROM integration_events WHERE client_id=$1", [id]); await db.query("DELETE FROM integration_clients WHERE id=$1", [id]); }
+  // Delete only the two accounts created by this process. RLS requires cleanup to
+  // run once per owner; never identify records by broad [test] title patterns alone.
+  const tables = ["agent_operations", "agent_jobs", "reminder_done", "crawl_seen", "crawl_runs", "integration_events", "integration_job_refs", "versions", "files", "enrichment_results", "enrichment_tasks", "enrichment_state", "notifications", "ai_cache", "documents", "brand_assets", "part_time_records", "reminders", "company_watches", "integration_clients", "agent_runs", "entries", "meta"];
+  for (const account of Object.values(accounts)) {
+    await db.query("SELECT set_config('runway.user_id',$1,false)", [account.id]);
+    for (const table of ["checkpoints", "checkpoint_blobs", "checkpoint_writes"]) await db.query(`DELETE FROM runway_agent.${table}`);
+    for (const table of tables) await db.query(`DELETE FROM ${table} WHERE user_id=$1`, [account.id]);
+    await db.query("DELETE FROM rate_limits WHERE key LIKE $1", [`user:${account.id}:%`]);
+    await db.query("DELETE FROM accounts WHERE id=$1", [account.id]);
+    await rm(path.join(process.env.ATTACHMENTS_DIR || path.resolve("data/attachments"), account.id), { recursive: true, force: true });
+  }
   await db.end();
 });
 
 test("requests from another origin are refused", async () => {
   const r = await call("/api/desk", { method: "POST", body: { action: "save", entry: entry() }, headers: { origin: "https://evil.example" } });
   assert.equal(r.status, 403);
+});
+test("disabled accounts cannot bypass AI configuration or execution policy", async () => {
+  await db.query("UPDATE accounts SET ai_enabled=false WHERE id=$1", [accounts.a.id]);
+  try {
+    assert.equal((await call("/api/settings/ai", { method: "POST", body: { action: "test", base: aiBase, apiKey: "test-key", model: "mock-model-a", revision: 1 } })).status, 403);
+    assert.equal((await call("/api/ai", { method: "POST", body: { messages: [{ role: "user", text: "添加提醒" }], images: [] } })).status, 403);
+    const brief = await call("/api/brief", { method: "POST", body: {} });
+    assert.equal(brief.status, 200);
+    assert(Array.isArray(brief.body.brief.items));
+  } finally { await db.query("UPDATE accounts SET ai_enabled=true WHERE id=$1", [accounts.a.id]); }
 });
 test("malformed bodies are client errors, not 503", async () => {
   assert.equal((await call("/api/desk", { method: "POST", body: "{not json" })).status, 400);
@@ -157,7 +201,7 @@ test("CVs in Markdown, Word and PDF become profile text", async () => {
   assert.equal((await call("/api/enrichment")).body.profile.cv, null);
 });
 test("a live scan finds and judges real postings", { skip: !process.env.SCAN_LIVE }, async () => {
-  const watch = { id: randomUUID(), kind: "company", company: "[test] Greenhouse", url: "https://job-boards.greenhouse.io/anthropic", enabled: false, regions: [], workModes: [], employmentTypes: [], schedules: [], keywords: "", excludeKeywords: "", notes: "", revision: 0 };
+  const watch = { id: randomUUID(), kind: "company", company: "[test] Greenhouse", url: "https://job-boards.greenhouse.io/anthropic", enabled: false, locations: [], workModes: [], employmentTypes: [], schedules: [], keywords: "", excludeKeywords: "", notes: "", revision: 0 };
   created.watches.push(watch.id);
   assert.equal((await call("/api/watches", { method: "POST", body: { action: "save", watch } })).status, 200);
   assert.equal((await call("/api/scan", { method: "POST", body: { action: "run", watchIds: [watch.id] } })).status, 200);
@@ -165,17 +209,60 @@ test("a live scan finds and judges real postings", { skip: !process.env.SCAN_LIV
   for (let i = 0; i < 60; i++) { await new Promise(r => setTimeout(r, 3000)); run = (await call("/api/scan")).body.lastRuns[watch.id]; if (run && run.status !== "running") break; }
   assert.equal(run.status, "ok", run.error); assert(run.found > 0); assert(run.added <= 5);
 });
+test("accounts isolate entries, exports, attachments, AI settings and integration tokens", async () => {
+  active = "a";
+  const aEntry = await create({ title: "[test] account A only", jd: "private A export text" });
+  const upload = new FormData();
+  upload.append("entryId", aEntry.id); upload.append("file", new File(["private attachment A"], "a-private.txt", { type: "text/plain" }));
+  const uploaded = await call("/api/desk", { method: "POST", form: upload });
+  assert.equal(uploaded.status, 200, JSON.stringify(uploaded.body));
+  const aClient = await call("/api/settings/integrations", { method: "POST", body: { action: "create", name: "[test] account A token" } });
+  assert.equal(aClient.status, 200, JSON.stringify(aClient.body)); created.clients.push(aClient.body.id);
+
+  active = "b";
+  const bEntry = await create({ title: "[test] account B only", jd: "private B export text" });
+  assert.equal((await call(`/api/desk?entry=${aEntry.id}`)).status, 404);
+  const bExport = await call("/api/desk?export=1");
+  assert.equal(bExport.status, 200); assert(!bExport.body.entries.some(e => e.id === aEntry.id));
+  assert(bExport.body.entries.some(e => e.id === bEntry.id && e.jd === "private B export text"));
+  assert(!bExport.body.files.some(f => f.id === uploaded.body.id));
+  assert.equal((await call(`/api/desk?file=${uploaded.body.id}`)).status, 404);
+  const bSettings = await call("/api/settings/ai");
+  assert.equal(bSettings.body.model, "mock-model-b");
+  const bClient = await call("/api/settings/integrations", { method: "POST", body: { action: "create", name: "[test] account B token" } });
+  assert.equal(bClient.status, 200, JSON.stringify(bClient.body));
+
+  const tokenEntries = async token => {
+    const response = await fetch(base + "/api/integrations/v1/entries", { headers: { authorization: `Bearer ${token}` } });
+    return { status: response.status, body: await response.json() };
+  };
+  const viaA = await tokenEntries(aClient.body.token), viaB = await tokenEntries(bClient.body.token);
+  assert.equal(viaA.status, 200); assert(viaA.body.entries.some(e => e.id === aEntry.id)); assert(!viaA.body.entries.some(e => e.id === bEntry.id));
+  assert.equal(viaB.status, 200); assert(viaB.body.entries.some(e => e.id === bEntry.id)); assert(!viaB.body.entries.some(e => e.id === aEntry.id));
+
+  active = "a";
+  assert.equal((await call("/api/settings/ai")).body.model, "mock-model-a");
+  const aExport = await call("/api/desk?export=1");
+  assert(aExport.body.entries.some(e => e.id === aEntry.id && e.jd === "private A export text"));
+  assert(!aExport.body.entries.some(e => e.id === bEntry.id));
+  assert(aExport.body.files.some(f => f.id === uploaded.body.id));
+  const downloaded = await call(`/api/desk?file=${uploaded.body.id}`);
+  assert.equal(downloaded.status, 200); assert.equal(downloaded.body, "private attachment A");
+});
 test("signing out everywhere invalidates existing sessions", async () => {
-  const old = cookie;
+  active = "a";
+  const old = accounts.a.cookie;
   assert.equal((await call("/api/auth", { method: "POST", body: { action: "logout-all" } })).status, 200);
-  cookie = old;
+  accounts.a.cookie = old;
   assert.equal((await call("/api/desk")).status, 401);
-  await login();
+  active = "b";
+  assert.equal((await call("/api/desk")).status, 200, "account A logout-all must not revoke account B sessions");
+  await authenticate("a"); active = "a";
   assert.equal((await call("/api/desk")).status, 200);
 });
 
 test("LangGraph confirmation is server-owned, authenticated and idempotent", async () => {
-  await login();
+  active = "a"; await authenticate("a");
   const proposed = await call("/api/ai", { method: "POST", body: { messages: [{ role: "user", text: "每天9点提醒我检查测试记录" }], images: [] } });
   assert.equal(proposed.status, 200, JSON.stringify(proposed.body));
   const { runId, actions } = proposed.body, draft = actions[0];

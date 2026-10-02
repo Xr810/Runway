@@ -3,7 +3,7 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowDownUp, BriefcaseBusiness, Columns3, FileCheck2, FileText, Flag, List, ListFilter, Plus, Search, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { type Entry, closed, companyTypes, dayDiff, employmentTypes, regions, schedules, score, workModes } from "@/lib/model";
+import { type Entry, closed, companyTypes, dayDiff, employmentTypes, schedules, score, workModes } from "@/lib/model";
 import { matchesAiFilter } from "@/lib/ai-contract";
 import { isApplied } from "@/lib/journey";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,6 @@ import { CompanyMark, DueLabel, EmptyState, PageHeader, ScoreValue, Segmented, S
 import { jdLabel } from "../entry-detail";
 
 const attributes = [
-  { key: "region", label: "地区", options: regions },
   { key: "workMode", label: "工作模式", options: workModes },
   { key: "employmentType", label: "岗位类型", options: employmentTypes },
   { key: "schedule", label: "工作时间", options: schedules },
@@ -175,7 +174,7 @@ function Board({ entries }: { entries: Entry[] }) {
           <div className="flex items-center gap-2"><CompanyMark name={e.organization || e.title} src={logoFor(e.organization)} size="sm" /><span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{e.organization}</span><PriorityFlag priority={e.priority} /></div>
           <p className="line-clamp-2 text-[13px] leading-snug font-medium">{e.title}</p>
           <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-            {stage.statuses.length > 1 ? <StatusBadge status={e.status} /> : <span className="truncate">{e.location || e.region}</span>}
+            {stage.statuses.length > 1 ? <StatusBadge status={e.status} /> : <span className="truncate">{e.location}</span>}
             {k && <span className={cn("tabular shrink-0", dayDiff(k.date) >= 0 && dayDiff(k.date) <= 3 && "font-medium text-red-600 dark:text-red-400")}>{k.kind} {k.date.slice(5)}</span>}
           </div>
         </button>; })}

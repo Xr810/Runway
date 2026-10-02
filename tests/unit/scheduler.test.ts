@@ -8,7 +8,7 @@ function fixture() {
   const calls = { scan: 0, companies: 0, release: 0, unlock: 0, errors: 0 };
   const fail = { scan: false, companies: false, connect: false };
   const client = {
-    query: async (sql: string) => { if (sql.includes("unlock")) calls.unlock++; return { rows: [{ ok: true }] }; },
+    query: async (sql: string) => { if (sql.includes("unlock")) calls.unlock++; return { rows: sql.includes("FROM accounts") ? [{ id: "account-a" }] : [{ ok: true }] }; },
     release: () => { calls.release++; },
   };
   const pool = {
@@ -19,7 +19,9 @@ function fixture() {
     },
   };
   const scheduler = loadModule<{ schedulerTick(): Promise<void> }>(new URL("../../lib/scheduler.ts", import.meta.url), {
-    "./postgres": { pool, locks: { scheduler: 1 } },
+    "./postgres": { pool, controlPool: pool, runAsUser: (_id: string, work: () => unknown) => work(), locks: { scheduler: 1 } },
+    "./appointments": { RECRUITING_TIME_ZONE: "Asia/Hong_Kong" },
+    "./recruiting-dispatch": { dispatchRecruitingRemindersForUser: async () => {} },
     "./scanner": { scanSettings: async () => ({ enabled: true, time: "00:00" }), runScan: async () => { calls.scan++; if (fail.scan) throw Error("source failed"); } },
     "./company-complete": { completeCompanies: async () => { calls.companies++; if (fail.companies) throw Error("AI unavailable"); } },
     "./ai-client": { aiConfigured: async () => true }, "./model": { today: () => day },

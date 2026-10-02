@@ -8,6 +8,7 @@ import { type CompanyWatch } from "@/lib/watches";
 import { type AiFilter } from "@/lib/ai-contract";
 import { type EnrichmentTarget } from "@/lib/enrichment-contract";
 import { type Reminder } from "@/lib/reminder-schema";
+import { defaultReminderPreferences, type ReminderPreferences } from "@/lib/recruiting-reminders";
 import { readJson } from "@/lib/api-response";
 export { readJson } from "@/lib/api-response";
 
@@ -15,7 +16,7 @@ export { readJson } from "@/lib/api-response";
 export type ListEntry = Entry & { jdChars?: number };
 export type VersionMeta = { id: string; entry_id: string; created: string };
 export type VersionFull = VersionMeta & { data: string };
-export type DeskData = { entries: ListEntry[]; files: Attachment[]; versions: VersionMeta[]; watches: CompanyWatch[]; directory: Directory };
+export type DeskData = { entries: ListEntry[]; files: Attachment[]; versions: VersionMeta[]; watches: CompanyWatch[]; directory: Directory; reminderPreferences: ReminderPreferences };
 export type ReminderItem = Reminder & { description: string };
 export type Reminders = { reminders: ReminderItem[]; today: (ReminderItem & { done: boolean })[] };
 export type ActiveAiFilter = AiFilter & { ids: string[] | null };
@@ -27,7 +28,7 @@ export async function postJson<T = Record<string, unknown>>(path: string, body: 
 }
 async function fetchDesk(): Promise<DeskData> {
   const d = await readJson<Partial<DeskData> & { entries: ListEntry[]; files: Attachment[]; versions: VersionMeta[] }>(await fetch("/api/desk", { cache: "no-store" }));
-  return { ...d, watches: d.watches || [], directory: d.directory || emptyDirectory };
+  return { ...d, watches: d.watches || [], directory: d.directory || emptyDirectory, reminderPreferences: d.reminderPreferences ?? defaultReminderPreferences };
 }
 export async function fetchEntry(id: string) { return readJson<{ entry: Entry; versions: VersionFull[] }>(await fetch("/api/desk?entry=" + encodeURIComponent(id), { cache: "no-store" })); }
 
@@ -53,7 +54,7 @@ export function useDesk() { const value = useContext(DeskContext); if (!value) t
 
 export function DeskProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const [data, setData] = useState<DeskData>({ entries: [], files: [], versions: [], watches: [], directory: emptyDirectory });
+  const [data, setData] = useState<DeskData>({ entries: [], files: [], versions: [], watches: [], directory: emptyDirectory, reminderPreferences: defaultReminderPreferences });
   const [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null), [detail, setDetail] = useState<{ entry: Entry; versions: VersionFull[] } | null>(null);
   const [draft, setDraft] = useState<Entry | null>(null), [returnTo, setReturnTo] = useState<string | null>(null);

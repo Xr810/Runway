@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ArrowUpRight, Building2, Check, ExternalLink, Globe, ImageIcon, LoaderCircle, Pencil, Plus, Radar, Search, SearchCode } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { type Entry, employmentTypes, regions, schedules, workModes } from "@/lib/model";
+import { type Entry, employmentTypes, schedules, workModes } from "@/lib/model";
 import { allChannels, channelSchema, companyProfileSchema, groupCompanies, identity, isApplied } from "@/lib/journey";
 import { blankWatch, watchSchema, type CompanyWatch } from "@/lib/watches";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,6 @@ type Editor = { type: "company" | "channel"; name: string; url: string; logoUrl:
 type Selection = { type: "company" | "channel"; key: string } | null;
 const host = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; } };
 const watchFilters = [
-  { key: "regions", label: "地区", options: regions },
   { key: "workModes", label: "工作模式", options: workModes },
   { key: "employmentTypes", label: "岗位类型", options: employmentTypes },
   { key: "schedules", label: "工作时间", options: schedules },
@@ -107,7 +106,7 @@ export default function CompaniesView() {
           <div className="flex items-start gap-3"><span className="inline-flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground"><SearchCode className="size-4" /></span>
             <div className="min-w-0 flex-1"><p className="truncate font-semibold">{b.company}</p><a href={b.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 truncate text-xs text-primary hover:underline">{host(b.url)}<ExternalLink className="size-3 shrink-0" /></a></div>
             <Switch checked={b.enabled} disabled={busy} aria-label={"关注 " + b.company} onCheckedChange={v => void saveTracking({ ...b, enabled: v })} /></div>
-          <p className="text-xs text-muted-foreground">{[b.keywords && "包含：" + b.keywords, b.excludeKeywords && "排除：" + b.excludeKeywords, b.regions.join("、"), [...b.employmentTypes, ...b.workModes].join(" · ")].filter(Boolean).join(" · ") || "没有额外条件，按你的求职方向筛选"}</p>
+          <p className="text-xs text-muted-foreground">{[b.keywords && "包含：" + b.keywords, b.excludeKeywords && "排除：" + b.excludeKeywords, b.locations.join("、"), [...b.employmentTypes, ...b.workModes].join(" · ")].filter(Boolean).join(" · ") || "没有额外条件，按你的求职方向筛选"}</p>
           <div className="flex items-center justify-between gap-2 border-t pt-3"><ScanStatus run={lastRun(b.id)} className="min-w-0 truncate" />
             <div className="flex shrink-0 gap-1"><Button size="xs" variant="ghost" onClick={() => setTracking({ ...b })}><Pencil />条件</Button><Button size="xs" variant="outline" disabled={scan.busy} onClick={() => void scan.run([b.id])}><Radar />扫描</Button></div></div>
         </article>)}</div>
@@ -150,7 +149,7 @@ export default function CompaniesView() {
               <p className="mb-3 text-xs text-muted-foreground">每天自动扫描这里的招聘页，按你的求职方向和下面的条件挑出合适的岗位加入。Muse 也会读取这些设置。</p>
               {watchesOf(company.name).map(w => <div key={w.id} className="flex flex-wrap items-start gap-3 rounded-lg border bg-card p-3">
                 <div className="min-w-0 flex-1 text-xs"><a href={w.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 truncate text-sm text-primary hover:underline">{host(w.url)}<ExternalLink className="size-3" /></a>
-                  <p className="mt-1 text-muted-foreground">{w.regions.join("、") || "地区不限"} · {[...w.employmentTypes, ...w.workModes, ...w.schedules].join(" · ") || "类型不限"}</p>
+                  <p className="mt-1 text-muted-foreground">{w.locations.join("、") || "地点不限"} · {[...w.employmentTypes, ...w.workModes, ...w.schedules].join(" · ") || "类型不限"}</p>
                   {w.keywords && <p className="mt-0.5 text-muted-foreground">包含：{w.keywords}</p>}{w.excludeKeywords && <p className="mt-0.5 text-muted-foreground">排除：{w.excludeKeywords}</p>}</div>
                 <div className="flex flex-col items-end gap-2"><label className="flex items-center gap-2 text-xs text-muted-foreground">{w.enabled ? "追踪中" : "已暂停"}<Switch checked={w.enabled} disabled={busy} aria-label={"追踪 " + company.name} onCheckedChange={v => void saveTracking({ ...w, enabled: v })} /></label>
                   <Button size="xs" variant="ghost" disabled={busy} onClick={() => setTracking({ ...w })}><Pencil />条件</Button>
@@ -195,6 +194,7 @@ export default function CompaniesView() {
           {tracking.kind === "board" && <div className="grid gap-1.5"><Label htmlFor="w-name">网站名称</Label><Input id="w-name" required maxLength={200} placeholder="例如：JobsDB 香港量化实习" value={tracking.company} disabled={busy} onChange={e => setTracking({ ...tracking, company: e.target.value })} /></div>}
           <label className="flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm">{tracking.kind === "board" ? "自动扫描这个页面" : "追踪这家公司的新岗位"}<Switch checked={tracking.enabled} disabled={busy} onCheckedChange={v => setTracking({ ...tracking, enabled: v })} /></label>
           <div className="grid gap-1.5"><Label htmlFor="w-url">{tracking.kind === "board" ? "搜索结果页链接" : "招聘列表页"}</Label><Input id="w-url" required type="url" placeholder="https://公司招聘网站/职位列表" maxLength={4000} value={tracking.url} disabled={busy} onChange={e => setTracking({ ...tracking, url: e.target.value })} /><p className="text-[11px] text-muted-foreground">{tracking.kind === "board" ? "先在网站上按关键词、地区筛好，再复制结果页地址。" : "填职位列表页，不是某个岗位的详情页。Greenhouse、Lever、Ashby、Workday 等招聘系统的页面最稳定。"}</p></div>
+          <div className="grid gap-1.5"><Label htmlFor="w-locations">工作地点</Label><Input id="w-locations" maxLength={2000} placeholder="香港、伦敦（英国）" value={tracking.locations.join("、")} disabled={busy} onChange={e => setTracking({ ...tracking, locations: e.target.value.split(/[、,，]/).map(v => v.trim()).filter(Boolean).slice(0, 30) })} /><p className="text-[11px] text-muted-foreground">多个实际工作地点用逗号分隔；留空表示不限。</p></div>
           {watchFilters.map(g => <div key={g.key} className="grid gap-2"><p className="flex items-center justify-between text-sm font-medium">{g.label}<span className="text-xs font-normal text-muted-foreground">{tracking[g.key].length ? `已选 ${tracking[g.key].length} 项` : "不限"}</span></p>
             <div className="flex flex-wrap gap-2">{g.options.filter(o => o !== "待核实").map(o => { const on = tracking[g.key].includes(o); return <label key={o} className={cn("inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs", on && "border-primary/50 bg-accent text-accent-foreground")}>
               <Checkbox className="size-3.5" checked={on} disabled={busy} onCheckedChange={v => setTracking({ ...tracking, [g.key]: v === true ? [...tracking[g.key], o] : tracking[g.key].filter(x => x !== o) })} />{o}</label>; })}</div></div>)}

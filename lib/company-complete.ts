@@ -1,12 +1,14 @@
 import { z } from "zod";
-import { pool } from "./postgres";
+import { currentUserId, pool, runAsUser } from "./postgres";
 import { companyTypes, type Entry } from "./model";
 import { identity, directorySchema } from "./journey";
 import { getDirectory, saveDirectory } from "./directory-storage";
 import { listEntries, patchEntry, EntryError } from "./entries";
 import { allWatches } from "./watch-storage";
 import { aiJson } from "./ai-client";
-import { publicFetch } from "./web";
+import { readPage, type ReadablePage } from "./web";
+import { getAiConfig } from "./ai-config";
+import { searchTavily } from "./tavily";
 import { claimEnrichment, completeEnrichment, enrichmentFeed, failEnrichment, localActor, queueEnrichment, syncEnrichment } from "./enrichment";
 import { officialIconParserVersion, scanOfficialLogo } from "./brand-scan";
 import { notify } from "./notifications";
@@ -18,40 +20,49 @@ type Attempt = { at: string; website?: string; note: string; failed?: boolean };
 
 async function attempts(): Promise<Record<string, Attempt>> { const row = (await pool.query("SELECT value FROM meta WHERE key=$1", [stateKey])).rows[0]; return row ? JSON.parse(row.value) : {}; }
 async function remember(id: string, attempt: Attempt) {
-  await pool.query("INSERT INTO meta(key,value) VALUES($1,$2::jsonb::text) ON CONFLICT(key) DO UPDATE SET value=(meta.value::jsonb || $2::jsonb)::text", [stateKey, JSON.stringify({ [id]: attempt })]);
+  const userId = await currentUserId();
+  await pool.query("INSERT INTO meta(user_id,key,value) VALUES($1,$2,$3::jsonb::text) ON CONFLICT(user_id,key) DO UPDATE SET value=(meta.value::jsonb || $3::jsonb)::text", [userId, stateKey, JSON.stringify({ [id]: attempt })]);
 }
-/** A homepage counts only if it answers with HTML. */
-async function reachable(url: string) { try { const page = await publicFetch(url, { signal: AbortSignal.timeout(15000), maxBytes: 3 * 1024 * 1024 }); return page.mime.includes("html") ? page.url : null; } catch { return null; } }
-
 async function findWebsite(name: string, jobs: Entry[], signal: AbortSignal) {
+  const normalized = name.toLocaleLowerCase().replace(/[^a-z0-9\p{L}]/gu, "");
+  const confirms = (page: ReadablePage) => (`${page.title}\n${page.text}`).toLocaleLowerCase().replace(/[^a-z0-9\p{L}]/gu, "").includes(normalized);
   for (const job of jobs) for (const link of [job.applicationUrl, job.url, job.companySource]) {
     if (!link) continue;
-    try { const host = new URL(link).hostname; if (!recruitingHosts.test(host)) { const home = await reachable(`https://${host.replace(/^(careers?|jobs|apply|recruit(ing)?|talent|hr)\./, "")}/`); if (home) return { website: new URL(home).origin, note: "来自岗位链接的域名" }; } } catch { /* try the next link */ }
+    try { const host = new URL(link).hostname; if (!recruitingHosts.test(host)) { const page = await readPage(link, signal); if (confirms(page)) return { website: new URL(page.url).origin, note: "岗位原始页面确认" }; } } catch { /* try the next link */ }
   }
-  const guess = await aiJson("company-website", "给出公司的官方网站首页（公司主页，不是招聘平台或第三方页面）。不确定就返回 null，不要猜。", `公司名称：${name}\n相关岗位：${jobs.slice(0, 3).map(j => `${j.title}（${j.location}）${j.url}`).join("；") || "无"}\n输出 {"website":"https://…" 或 null}`,
-    z.object({ website: z.string().url().nullable() }), { signal, maxTokens: 300 });
-  if (!guess.website || recruitingHosts.test(new URL(guess.website).hostname)) return null;
-  const home = await reachable(guess.website);
-  return home ? { website: new URL(home).origin, note: "AI 推断，已确认网站可访问" } : null;
+  const key = (await getAiConfig()).tavilyKey;
+  if (!key) return null;
+  const results = await searchTavily(`${name} official website company`, key, signal).catch(() => []);
+  for (const result of results) {
+    try {
+      const url = new URL(result.url); if (recruitingHosts.test(url.hostname)) continue;
+      const page = await readPage(url.href, signal);
+      if (confirms(page)) return { website: new URL(page.url).origin, note: "联网搜索及官网页面确认" };
+    } catch { /* an unreadable search result is not evidence */ }
+  }
+  return null;
 }
 const typeSchema = z.object({ companyType: z.string(), basis: z.string().max(400), confidence: z.enum(["high", "medium", "low"]) });
 async function classify(name: string, website: string, signal: AbortSignal) {
-  const result = await aiJson("company-type", `按集团背景给公司归类，只能是 ${JSON.stringify(companyTypes.filter(t => t !== "待核实"))} 之一。依据写一句中文（总部所在地、所属集团）。不确定时 confidence=low。`,
-    `公司：${name}\n官网：${website || "未知"}\n输出 {"companyType","basis","confidence"}`, typeSchema, { signal, maxTokens: 300 });
+  if (!website) return null;
+  let page: ReadablePage; try { page = await readPage(website, signal); } catch { return null; }
+  const result = await aiJson("company-type", `只根据提供的官网页面事实按集团背景归类，只能是 ${JSON.stringify(companyTypes.filter(t => t !== "待核实"))} 之一。用简洁中文说明页面中的明确依据；不知道就 confidence=low，严禁用常识猜测。`,
+    `公司：${name}\n官网：${page.url}\n页面标题：${page.title}\n页面正文：${page.text.slice(0, 10000)}\n输出 {"companyType","basis","confidence"}`, typeSchema, { signal, maxTokens: 300 });
   return companyTypes.includes(result.companyType) && result.companyType !== "待核实" && result.confidence !== "low" ? result : null;
 }
 
-let running: Promise<{ updated: number }> | null = null;
-let run: { id: string; status: "running" | "completed" | "failed"; error?: string; updated?: number } | null = null;
-export const completionRunning = () => !!running;
+type Run = { id: string; status: "running" | "completed" | "failed"; error?: string; updated?: number };
+const running = new Map<string, Promise<{ updated: number }>>(), runs = new Map<string, Run>();
+export const completionRunning = async () => running.has(await currentUserId());
 /**
  * Fills in missing company details: official website, icon, and the company type of jobs still
  * marked 待核实. Each company is tried at most once a week unless `force` is set.
  */
-export function completeCompanies(options: { names?: string[]; force?: boolean; refreshLogo?: boolean; limit?: number } = {}) {
-  if (running) return running;
-  run = { id: crypto.randomUUID(), status: "running" };
-  running = (async () => {
+export async function completeCompanies(options: { names?: string[]; force?: boolean; refreshLogo?: boolean; limit?: number } = {}) {
+  const userId = await currentUserId(), active = running.get(userId);
+  if (active) return active;
+  runs.set(userId, { id: crypto.randomUUID(), status: "running" });
+  const promise = runAsUser(userId, async () => {
     const signal = AbortSignal.timeout(10 * 60 * 1000);
     const [entries, watches, tried] = await Promise.all([listEntries(), allWatches(), attempts()]);
     let feed=await enrichmentFeed();
@@ -107,6 +118,10 @@ export function completeCompanies(options: { names?: string[]; force?: boolean; 
             notes.push(`公司类型：${type.companyType}`);
           }
         }
+        const profile = directory.companies.find(company => identity(company.name) === id);
+        const missing = [!website && "官网", !profile?.logoUrl && !logo(id)?.result && "官方图标",
+          (await listEntries()).some(job => job.kind === "job" && identity(job.organization) === id && job.companyType === "待核实") && "公司类型依据"].filter(Boolean);
+        if (missing.length) throw Error(`仍待核实：${missing.join("、")}。${notes.join("；")}`);
         if (notes.some(n => /^官网|^已缓存|^公司类型/.test(n))) done.push(`${name}：${notes.join("；")}`);
         await remember(id, { at: new Date().toISOString(), website, note: notes.join("；") });
       } catch (e) { failed++; await remember(id, { at: new Date().toISOString(), failed: true, note: "失败：" + (e as Error).message }); }
@@ -119,7 +134,8 @@ export function completeCompanies(options: { names?: string[]; force?: boolean; 
     if (done.length) { await syncEnrichment(); await notify({ actor: "Runway AI", action: "company", summary: `补全了 ${done.length} 家公司的资料`, title: "公司资料补全", changes: [{ field: "companies", before: null, after: done.join("\n") }] }); }
     if (failed) throw Error(`${failed} 家公司的资料补全失败，将稍后重试`);
     return { updated: done.length };
-  })().then(result => { if (run) run = { ...run, status: "completed", updated: result.updated }; return result; }, error => { if (run) run = { ...run, status: "failed", error: (error as Error).message }; throw error; }).finally(() => { running = null; });
-  return running;
+  }).then(result => { const run = runs.get(userId); if (run) runs.set(userId, { ...run, status: "completed", updated: result.updated }); return result; }, error => { const run = runs.get(userId); if (run) runs.set(userId, { ...run, status: "failed", error: (error as Error).message }); throw error; }).finally(() => { running.delete(userId); });
+  running.set(userId, promise);
+  return promise;
 }
-export async function completionState() { return { running: completionRunning(), run, attempts: await attempts() }; }
+export async function completionState() { const userId = await currentUserId(); return { running: running.has(userId), run: runs.get(userId) ?? null, attempts: await attempts() }; }

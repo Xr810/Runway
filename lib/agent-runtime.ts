@@ -16,6 +16,7 @@ import { loadAgentSnapshot, readAgentData } from "./agent-context";
 import { centralizeReply } from "./agent-legacy";
 import { routeCompanyLogoCompletion } from "./agent-intents";
 import type { AgentDecision, AgentRunReply, AgentOutcome } from "./agent-runtime-contract";
+import { agentCheckpointConfig } from "./agent-checkpoint";
 import type { z } from "zod";
 
 export class AgentRunError extends Error { constructor(public status: number, message: string) { super(message); } }
@@ -31,7 +32,6 @@ async function ensureCheckpoint() {
   })().catch(e => { ready = undefined; throw e; });
   await ready;
 }
-const config = (id: string) => ({ configurable: { thread_id: id }, recursionLimit: 50 });
 function graph(signal?: AbortSignal) {
   return createRunwayGraph(saver, {
     async plan(runId) {
@@ -65,7 +65,7 @@ async function withRunLock<T>(id: string, work: () => Promise<T>): Promise<T> {
 const emptyReply: AiReply = { reply: "", model: "", actions: [], drafts: [], partTime: [], filter: null, matchCount: null, matchIds: null, enrichment: null, reminders: [], watches: [], directory: [], profile: null, scan: null, completeCompanies: null, pages: [] };
 export async function getAgentRun(id: string, owner: string): Promise<AgentRunReply> {
   const row = await ownedRun(id, owner); await ensureCheckpoint();
-  const state = await graph().getState(config(id));
+  const state = await graph().getState(agentCheckpointConfig(id, owner));
   const outcomes: Record<string, AgentOutcome> = { ...state.values.outcomes ?? {} };
   const receipts = await pool.query("SELECT id,result FROM agent_operations WHERE run_id=$1", [id]);
   for (const receipt of receipts.rows) outcomes[receipt.id] = receipt.result;
@@ -84,10 +84,11 @@ export async function startAgentRun(id: string, owner: string, input: z.infer<ty
   return advanceAgentRun(id, owner, undefined, signal);
 }
 export async function advanceAgentRun(id: string, owner: string, decision?: AgentDecision, signal?: AbortSignal) {
+  if ((await getAiConfig()).enabled === false) throw new AgentRunError(403, "此账户未启用 AI。");
   return withRunLock(id, async () => {
     const row = await ownedRun(id, owner); await ensureCheckpoint();
     if (Date.now() - Date.parse(row.created) > 7 * 86400000) throw new AgentRunError(409, "提案已超过7天，请重新读取并生成提案。");
-    const g = graph(signal), state = await g.getState(config(id));
+    const g = graph(signal), threadConfig = agentCheckpointConfig(id, owner), state = await g.getState(threadConfig);
     if (decision) {
       if (!state.values.reply?.actions?.some((a: AgentDraft) => a.id === decision.proposalId)) throw new AgentRunError(400, "提案不属于本次运行。");
       if (state.values.outcomes?.[decision.proposalId]) return getAgentRun(id, owner);
@@ -97,12 +98,12 @@ export async function advanceAgentRun(id: string, owner: string, decision?: Agen
     if (!state.next.length && state.values.reply || !decision && state.next.includes("approval")) return getAgentRun(id, owner);
     await pool.query("UPDATE agent_runs SET status='running',error='',updated=now() WHERE id=$1", [id]);
     try {
-      if (!state.values.runId) await g.invoke({ runId: id }, config(id));
+      if (!state.values.runId) await g.invoke({ runId: id }, threadConfig);
       else if (state.next.includes("approval")) {
         if (!decision) return getAgentRun(id, owner);
-        await g.invoke(new Command({ resume: decision }), config(id));
-      } else await g.invoke(null, config(id)); // Replays a saved execute node; its receipt makes writes idempotent.
-      const next = await g.getState(config(id));
+        await g.invoke(new Command({ resume: decision }), threadConfig);
+      } else await g.invoke(null, threadConfig); // Replays a saved execute node; its receipt makes writes idempotent.
+      const next = await g.getState(threadConfig);
       await pool.query("UPDATE agent_runs SET status=$2,error='',updated=now() WHERE id=$1", [id, next.next.length ? "awaiting_confirmation" : "completed"]);
     } catch (e) {
       const message = (e as Error).message.slice(0, 1500);

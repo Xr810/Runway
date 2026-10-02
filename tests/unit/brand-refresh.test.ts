@@ -86,14 +86,14 @@ test("refresh replaces an existing automatic icon and failures never become comp
     completionState(): Promise<{ run: { id: string; status: string }; attempts: Record<string, { failed?: boolean }> }>;
   }>(new URL("../../lib/company-complete.ts", import.meta.url), {
     zod: { z }, "./model": model, "./journey": journey,
-    "./postgres": { pool: { query: async (sql: string, values: string[]) => {
+    "./postgres": { currentUserId: async () => "00000000-0000-0000-0000-000000000001", runAsUser: (_id: string, work: () => unknown) => work(), pool: { query: async (sql: string, values: string[]) => {
       if (sql.includes("enrichment_tasks")) return { rows: pending ? [{ id: "specific-task" }] : [] };
       if (sql.startsWith("SELECT")) return { rows: [{ value: JSON.stringify(attempts) }] };
-      Object.assign(attempts, JSON.parse(values[1])); return { rows: [] };
+      Object.assign(attempts, JSON.parse(values.at(-1)!)); return { rows: [] };
     } } },
     "./directory-storage": { getDirectory: async () => ({ revision: 1, companies: [{ name: "Example", website: "https://example.org", logoUrl: "" }], channels: [] }) },
     "./entries": { listEntries: async () => [] }, "./watch-storage": { allWatches: async () => [] },
-    "./ai-client": {}, "./web": {}, "./notifications": { notify: async () => {} },
+    "./ai-client": {}, "./web": { readPage: async () => ({ url: "https://example.org", title: "Example", text: "Example company", links: [], postings: [] }) }, "./ai-config": { getAiConfig: async () => ({ tavilyKey: "" }) }, "./tavily": { searchTavily: async () => [] }, "./notifications": { notify: async () => {} },
     "./brand-scan": { officialIconParserVersion:"official-icon-parser-v2",scanOfficialLogo: async () => { scans++; if (scanFails) throw Error("No usable logo"); return {kind:"brand",model:"official-icon-parser-v2"}; } },
     "./enrichment": {
       enrichmentFeed: async () => ({ states: states.length?states:[{ kind: "company", target_id: "example", result: { old: true } }] }),

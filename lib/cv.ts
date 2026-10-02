@@ -29,7 +29,7 @@ export async function saveCv(name: string, extension: string, bytes: Uint8Array)
     await client.query("INSERT INTO documents(id,kind,name,mime,size,text) VALUES($1,'cv',$2,$3,$4,$5)", [id, cv.name, cv.mime, cv.size, text]);
     const row = (await client.query("SELECT value FROM meta WHERE key=$1 FOR UPDATE", [profileKey])).rows[0];
     const profile = profileSchema.parse(row ? JSON.parse(row.value) : {});
-    await client.query("INSERT INTO meta(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value", [profileKey, JSON.stringify({ ...profile, cv, cvText: text, revision: profile.revision + 1 })]);
+    await client.query("INSERT INTO meta(key,value) VALUES($1,$2) ON CONFLICT(user_id,key) DO UPDATE SET value=EXCLUDED.value", [profileKey, JSON.stringify({ ...profile, cv, cvText: text, revision: profile.revision + 1 })]);
     if (profile.cv) await client.query("DELETE FROM documents WHERE id=$1", [profile.cv.id]);
     return profile.cv;
   }, { lock: locks.enrichment });

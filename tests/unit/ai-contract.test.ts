@@ -9,13 +9,13 @@ import { appointmentSchema } from "../../lib/appointments";
 import { canonicalUrl, guardStatus, integrationEventSchema } from "../../lib/integration-contract";
 import { blankWatch } from "../../lib/watches";
 
-const existing = { ...blankEntry("job"), title: "Quant intern", organization: "Example", region: "中国香港", deadline: "2026-10-03", revision: 3, jd: "Original full text", jdStatus: "complete" as const, extra: { preserved: true } };
+const existing = { ...blankEntry("job"), title: "Quant intern", organization: "Example", location: "香港", deadline: "2026-10-03", revision: 3, jd: "Original full text", jdStatus: "complete" as const, extra: { preserved: true } };
 const reply = (extra: object) => ({ reply: "ok", ...extra });
 
 test("filters are deterministic and computed by code", () => {
-  const filter = aiFilterSchema.parse({ label: "香港量化，待投递，本周截止", kind: "job", region: "中国香港", keywords: ["quant", "量化"], statuses: ["待投递"], deadlineFrom: "2026-10-01", deadlineTo: "2026-10-07" });
+  const filter = aiFilterSchema.parse({ label: "香港量化，待投递，本周截止", kind: "job", location: "香港", keywords: ["quant", "量化"], statuses: ["待投递"], deadlineFrom: "2026-10-01", deadlineTo: "2026-10-07" });
   assert(matchesAiFilter(existing, filter));
-  for (const patch of [{ deadline: "" }, { deadline: "2026-10-08" }, { status: "已投递" }, { region: "中国内地" }, { title: "Marketing intern" }, { kind: "competition" as const }]) assert(!matchesAiFilter({ ...existing, ...patch }, filter));
+  for (const patch of [{ deadline: "" }, { deadline: "2026-10-08" }, { status: "已投递" }, { location: "上海" }, { title: "Marketing intern" }, { kind: "competition" as const }]) assert(!matchesAiFilter({ ...existing, ...patch }, filter));
   const result = prepareAiReply(reply({ filter }), [existing, { ...existing, id: "other", status: "已投递" }], [], "m");
   assert.deepEqual(result.matchIds, [existing.id]); assert.equal(result.matchCount, 1);
 });
@@ -52,8 +52,8 @@ test("reminder proposals get ids; updates must target existing reminders", () =>
   assert.throws(() => prepareAiReply(reply({ reminders: [{ operation: "add", title: "x", schedule: { type: "daily", time: "25:00" } }] }), [], [], "m"));
 });
 test("watch, scan and profile proposals are validated", () => {
-  const w = prepareAiReply(reply({ watches: [{ operation: "add", kind: "board", company: "JobsDB", url: "https://hk.jobsdb.com/quant-jobs", regions: ["中国香港", "火星"] }] }), [], [], "m").watches[0];
-  assert.equal(w.watch.kind, "board"); assert.deepEqual(w.watch.regions, ["中国香港"]);
+  const w = prepareAiReply(reply({ watches: [{ operation: "add", kind: "board", company: "JobsDB", url: "https://hk.jobsdb.com/quant-jobs", locations: ["香港", "伦敦（英国）"] }] }), [], [], "m").watches[0];
+  assert.equal(w.watch.kind, "board"); assert.deepEqual(w.watch.locations, ["香港", "伦敦（英国）"]);
   assert.throws(() => prepareAiReply(reply({ watches: [{ operation: "add", company: "X", url: "javascript:alert(1)" }] }), [], [], "m"));
   const watch = { ...blankWatch(), company: "A", url: "https://a.example/jobs" };
   const scan = prepareAiReply(reply({ scan: { watchIds: [watch.id, "ghost"] } }), [], [], "m", { reminders: [], watches: [watch] }).scan;

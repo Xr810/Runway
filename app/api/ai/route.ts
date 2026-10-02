@@ -30,6 +30,7 @@ export async function POST(request: Request) {
   } catch { return json({ error: "消息或图片格式无效。" }, 400); }
   const runId = input.runId ?? crypto.randomUUID();
   try {
+    if ((await getAiConfig()).enabled === false) return json({ error: "此账户未启用 AI。" }, 403);
     if (!await hit("ai-chat", 60, 3600)) return json({ error: "本小时请求已达60次。" }, 429);
     return json(await startAgentRun(runId, user.userId, input, request.signal));
   } catch (e) { return json({ runId, error: e instanceof AgentRunError ? e.message : "AI 运行暂时失败，可从运行记录恢复。" }, e instanceof AgentRunError ? e.status : 503); }

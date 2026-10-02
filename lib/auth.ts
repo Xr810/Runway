@@ -1,24 +1,20 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { pool } from "./postgres";
-import { cookieName, validSession } from "./session";
+import { controlPool } from "./postgres";
+import { cookieName, tokenHash } from "./session";
 
-const key = "session-version";
-let cached: { value: number; at: number } | null = null;
-/** Current session generation, cached briefly so every request does not hit the database. */
-export async function sessionVersion(fresh = false) {
-  if (!fresh && cached && Date.now() - cached.at < 5000) return cached.value;
-  const row = (await pool.query("SELECT value FROM meta WHERE key=$1", [key])).rows[0];
-  cached = { value: row ? Number(row.value) : 0, at: Date.now() };
-  return cached.value;
-}
-export async function bumpSessionVersion() {
-  const row = (await pool.query("INSERT INTO meta(key,value) VALUES($1,'1') ON CONFLICT(key) DO UPDATE SET value=(meta.value::int+1)::text RETURNING value", [key])).rows[0];
-  cached = { value: Number(row.value), at: Date.now() };
-  return cached.value;
-}
-export async function getUser() {
+export type AuthUser = { userId: string; displayName: string };
+
+export async function getUser(): Promise<AuthUser | null> {
   const token = (await cookies()).get(cookieName)?.value;
-  return token && validSession(token, await sessionVersion()) ? { userId: "owner", displayName: "User" } : null;
+  if (!token || token.length > 128) return null;
+  const row = (await controlPool.query(
+    `SELECT a.id, a.display_name FROM auth_sessions s JOIN accounts a ON a.id=s.account_id
+       WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.expires_at>now()`, [tokenHash(token)],
+  )).rows[0];
+  if (!row) return null;
+  const user = { userId: String(row.id), displayName: String(row.display_name) };
+  return user;
 }
+
 export async function requireUser() { const user = await getUser(); if (!user) redirect("/login"); return user; }

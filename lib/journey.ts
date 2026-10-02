@@ -1,6 +1,7 @@
 import {z} from "zod";
 import {type Entry,today} from "./model";
-import {appointmentDate,appointmentTime} from "./appointments";
+import {appointmentTime,stageDueDate} from "./appointments";
+import {recruitingReminders,defaultReminderPreferences,type ReminderPreferences} from "./recruiting-reminders";
 const webUrl=z.string().max(4000).refine(v=>!v||URL.canParse(v)&&/^https?:\/\//i.test(v)&&!new URL(v).username&&!new URL(v).password,"请输入完整的网站地址").default("");
 const logoUrl=z.string().max(4000).refine(v=>!v||/^\/api\/brand-assets\/[a-f0-9-]{36}$/.test(v)||URL.canParse(v)&&new URL(v).protocol==="https:","标志图片请使用 HTTPS 地址或上传图片").default("");
 export const channelSchema=z.object({name:z.string().trim().min(1).max(100),url:webUrl,logoUrl});
@@ -29,12 +30,13 @@ export function heatmapDays(year:number){
  return days;
 }
 /** Dated events for the schedule. A job's application deadline stops mattering once it has been applied to. */
-export function timelineEvents(entries:Entry[]){
+export function timelineEvents(entries:Entry[],preferences:ReminderPreferences=defaultReminderPreferences){
  return entries.flatMap(entry=>[...[
   {date:entry.kind==="job"&&isApplied(entry)?"":entry.deadline,label:entry.kind==="job"?"投递截止":entry.kind==="project"?"项目目标":"比赛截止",type:"deadline"},
   {date:entry.followUp,label:"跟进",type:"followup"},
   {date:typeof entry.extra["面试 / 测评时间"]==="string"?entry.extra["面试 / 测评时间"].slice(0,10):"",label:"面试 / 测评",type:"interview"},
  ].filter(event=>/^\d{4}-\d{2}-\d{2}$/.test(event.date)&&!Number.isNaN(Date.parse(event.date))).map(event=>({...event,id:entry.id+event.type,time:"",detail:"",entry})),
- ...(entry.appointments||[]).filter(item=>item.status!=="cancelled").map(item=>({id:entry.id+item.id,date:appointmentDate(item.startsAt),time:appointmentTime(item.startsAt),label:item.type==="assessment"?"笔试 / 测评":item.type==="interview"?"面试":"跟进",type:item.type,detail:item.title+(item.status==="completed"?" · 已完成":"")+(item.location?" · "+item.location:""),entry})),
+ ...(entry.appointments||[]).filter(item=>item.status==="scheduled"&&item.stageState==="current"&&stageDueDate(item)).map(item=>({id:entry.id+item.id,date:stageDueDate(item),time:item.type==="assessment"?"":appointmentTime(item.startsAt),label:item.type==="assessment"?"笔试 / 测评截止":item.type==="interview"?"面试":"跟进",type:item.type,detail:item.title+(item.location?" · "+item.location:""),entry})),
+ ...recruitingReminders([entry],preferences).map(item=>({id:item.id,date:item.date,time:"",label:"无反馈跟进",type:"followup",detail:item.title,entry})),
  ]).sort((a,b)=>a.date.localeCompare(b.date)||a.time.localeCompare(b.time)||a.entry.title.localeCompare(b.entry.title));
 }

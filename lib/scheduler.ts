@@ -1,17 +1,19 @@
-import { pool, locks } from "./postgres";
+import { controlPool, pool, locks, runAsUser } from "./postgres";
 import { runScan, scanSettings } from "./scanner";
 import { completeCompanies } from "./company-complete";
 import { aiConfigured } from "./ai-client";
 import { today } from "./model";
+import { RECRUITING_TIME_ZONE } from "./appointments";
+import { dispatchRecruitingRemindersForUser } from "./recruiting-dispatch";
 import type { PoolClient } from "pg";
 
 const stateKey = "scheduler-state-v1";
 type State = { scanDay?: string; companiesAt?: string; cleanupDay?: string; scanRetryAt?: string | null; companiesRetryAt?: string | null; cleanupRetryAt?: string | null };
 const retryDelay = 15 * 60 * 1000;
-const clock = () => new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Singapore", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
+const clock = () => new Intl.DateTimeFormat("en-GB", { timeZone: RECRUITING_TIME_ZONE, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
 
 async function readState(): Promise<State> { const row = (await pool.query("SELECT value FROM meta WHERE key=$1", [stateKey])).rows[0]; return row ? JSON.parse(row.value) : {}; }
-async function writeState(patch: State) { await pool.query("INSERT INTO meta(key,value) VALUES($1,$2::jsonb::text) ON CONFLICT(key) DO UPDATE SET value=(meta.value::jsonb || $2::jsonb)::text", [stateKey, JSON.stringify(patch)]); }
+async function writeState(patch: State) { await pool.query("INSERT INTO meta(key,value) VALUES($1,$2::jsonb::text) ON CONFLICT(user_id,key) DO UPDATE SET value=(meta.value::jsonb || $2::jsonb)::text", [stateKey, JSON.stringify(patch)]); }
 
 /** Icons uploaded in the editor but never saved to a company, older than a day. */
 export async function removeUnusedBrandAssets() {
@@ -21,13 +23,8 @@ export async function removeUnusedBrandAssets() {
   return result.rowCount ?? 0;
 }
 
-export async function schedulerTick() {
-  let client: PoolClient | undefined;
+async function schedulerTickForUser() {
   try {
-    client = await pool.connect();
-    // One scheduler across processes: whoever holds the lock does the work.
-    if (!(await client.query("SELECT pg_try_advisory_lock($1) AS ok", [locks.scheduler])).rows[0].ok) return;
-    try {
       const state = await readState(), day = today(), now = clock();
       const ready = (at: string | null | undefined) => !at || !Number.isFinite(Date.parse(at)) || Date.parse(at) <= Date.now();
       const attempt = async (retryKey: "scanRetryAt" | "companiesRetryAt" | "cleanupRetryAt", work: () => Promise<unknown>, completed: () => State) => {
@@ -47,9 +44,28 @@ export async function schedulerTick() {
       const settings = await scanSettings();
       if (settings.enabled && state.scanDay !== day && now >= settings.time && ready(state.scanRetryAt)) await attempt("scanRetryAt", () => runScan("schedule"), () => ({ scanDay: day }));
       if ((!state.companiesAt || Date.now() - Date.parse(state.companiesAt) > 6 * 3600 * 1000) && ready(state.companiesRetryAt)) await attempt("companiesRetryAt", () => completeCompanies({ limit: 5 }), () => ({ companiesAt: new Date().toISOString() }));
-    } finally { await client.query("SELECT pg_advisory_unlock($1)", [locks.scheduler]); }
   } catch (e) { console.error("Scheduler tick failed", (e as Error).message); }
-  finally { client?.release(); }
+}
+
+export async function schedulerTick() {
+  let client: PoolClient | undefined;
+  try {
+    client = await controlPool.connect();
+    if (!(await client.query("SELECT pg_try_advisory_lock($1) AS ok", [locks.scheduler])).rows[0].ok) return;
+    const users = (await client.query("SELECT id::text FROM accounts ORDER BY id")).rows;
+    for (const user of users) {
+      try { await dispatchRecruitingRemindersForUser(user.id, today()); }
+      catch (error) { console.error("Reminder dispatch failed", error); }
+      await runAsUser(user.id, schedulerTickForUser);
+    }
+  } catch (e) {
+    console.error("Scheduler tick failed", (e as Error).message);
+  } finally {
+    if (client) {
+      await client.query("SELECT pg_advisory_unlock($1)", [locks.scheduler]).catch(() => {});
+      client.release();
+    }
+  }
 }
 
 const global = globalThis as unknown as { runwayScheduler?: NodeJS.Timeout };

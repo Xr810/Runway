@@ -52,8 +52,8 @@ configure_postgres() {
   if [[ "$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname = '$role'")" != "1" ]]; then
     sudo -u postgres createuser --login "$role"
   fi
-  if [[ "$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname = 'runway'")" != "1" ]]; then
-    sudo -u postgres createdb --owner "$role" runway
+  if [[ "$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname = 'runway_multiuser'")" != "1" ]]; then
+    sudo -u postgres createdb --owner "$role" runway_multiuser
   fi
 }
 
@@ -72,28 +72,38 @@ install_dependencies() {
 write_local_env() {
   mkdir -p data/attachments
   if [[ -f .env.local ]]; then
+    if grep -Fqx 'DATABASE_URL=postgresql:///runway?host=/var/run/postgresql' .env.local \
+      && grep -q '^LOGIN_PASSWORD_HASH=' .env.local; then
+      sed -i \
+        -e 's|^DATABASE_URL=postgresql:///runway?host=/var/run/postgresql$|DATABASE_URL=postgresql:///runway_multiuser?host=/var/run/postgresql|' \
+        -e '/^LOGIN_PASSWORD_HASH=/d' \
+        .env.local
+      echo "Moved the legacy orb environment to the fresh runway_multiuser database; the old runway database was not changed"
+      return
+    fi
     echo ".env.local already exists; leaving it unchanged"
     return
   fi
 
-  local session_secret settings_key password_hash
+  local session_secret settings_key
   session_secret="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))")"
   settings_key="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))")"
-  password_hash="$(node -e "const {randomBytes,scryptSync}=require('node:crypto');const salt=randomBytes(16).toString('hex');console.log(salt+':'+scryptSync('runway-orb-dev',salt,64).toString('hex'))")"
   cat >.env.local <<EOF
-DATABASE_URL=postgresql:///runway?host=/var/run/postgresql
+DATABASE_URL=postgresql:///runway_multiuser?host=/var/run/postgresql
 APP_ORIGIN=http://localhost:3000
 SESSION_SECRET=$session_secret
 AI_SETTINGS_KEY=$settings_key
-LOGIN_PASSWORD_HASH=$password_hash
 ATTACHMENTS_DIR=./data/attachments
 SCHEDULER=off
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+AI_MODE=personal
 AI_BASE_URL=
 AI_API_KEY=
 AI_MODEL=
 TAVILY_API_KEY=
 EOF
-  echo "Created .env.local for orb development (login: runway-orb-dev)"
+  echo "Created .env.local for orb development; register an account in the application"
 }
 
 check_node() {

@@ -11,23 +11,25 @@ import { TodayReminders } from "../reminders";
 import { CompanyMark, EmptyState, Panel, Pill, Stat, formatDay, relativeDay, stamp, type Tone } from "../ui";
 import ProgressDialog, { newProgress, type ProgressDraft } from "../progress-dialog";
 import { KindIcon, lastActivity } from "./projects";
+import { recruitingReminders } from "@/lib/recruiting-reminders";
 
 export const eventTone: Record<string, Tone> = { deadline: "red", followup: "blue", interview: "amber", assessment: "violet" };
-function greeting() { const h = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Singapore", hour: "numeric", hour12: false }).format(new Date())); return h < 5 ? "夜深了" : h < 12 ? "早上好" : h < 18 ? "下午好" : "晚上好"; }
+function greeting() { const h = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Hong_Kong", hour: "numeric", hour12: false }).format(new Date())); return h < 5 ? "夜深了" : h < 12 ? "早上好" : h < 18 ? "下午好" : "晚上好"; }
 const inStages = (e: Entry, statuses: string[]) => statuses.includes(e.status);
 
 export default function TodayView() {
   const { data, loading, openEntry, newEntry, logoFor, notifications, setNotificationsOpen } = useDesk();
   const [progress, setProgress] = useState<ProgressDraft | null>(null);
+  const reminderPreferences = data.reminderPreferences;
   const open = data.entries.filter(e => !closed(e)), jobs = open.filter(e => e.kind === "job");
-  const events = timelineEvents(open).filter(e => dayDiff(e.date) >= 0 && dayDiff(e.date) <= 14);
+  const events = timelineEvents(open, reminderPreferences).filter(e => dayDiff(e.date) >= 0 && dayDiff(e.date) <= 14);
   const days = [...new Set(events.map(e => e.date))];
   const dueSoon = open.filter(e => e.deadline && !(e.kind === "job" && isApplied(e)) && dayDiff(e.deadline) >= 0 && dayDiff(e.deadline) <= 7).length;
   const interviews = jobs.flatMap(e => e.appointments.filter(a => a.status === "scheduled" && Date.parse(a.startsAt) >= Date.now())).length;
   const overdue = open.filter(e => e.followUp && dayDiff(e.followUp) < 0).map(e => ({ entry: e, reason: `跟进日期已过 ${-dayDiff(e.followUp)} 天` }));
   const missed = jobs.filter(e => e.status === "待投递" && e.deadline && dayDiff(e.deadline) < 0).map(e => ({ entry: e, reason: `截止已过 ${-dayDiff(e.deadline)} 天，还没投递` }));
-  const waiting = jobs.filter(e => e.status === "已投递" && e.applied && dayDiff(e.applied) <= -14 && !(e.followUp && dayDiff(e.followUp) >= 0)).map(e => ({ entry: e, reason: `投递 ${-dayDiff(e.applied)} 天仍无回复` }));
-  const attention = [...missed, ...overdue, ...waiting].filter((x, i, all) => all.findIndex(y => y.entry.id === x.entry.id) === i);
+  const waiting = recruitingReminders(jobs, reminderPreferences).filter(reminder => dayDiff(reminder.date) <= 0).map(reminder => ({ entry: jobs.find(entry => entry.id === reminder.entryId)!, reason: `${reminder.title} · 已到跟进日` }));
+  const attention = [...missed, ...overdue, ...waiting].filter((x, i, all) => x.entry && all.findIndex(y => y.entry?.id === x.entry.id) === i);
   const tracks = open.filter(e => e.kind === "competition" || e.kind === "project").sort((a, b) => lastActivity(b).localeCompare(lastActivity(a)));
 
   return <>
@@ -96,7 +98,7 @@ export default function TodayView() {
 type Brief = { headline: string; items: { text: string; entryId: string | null; priority: "high" | "normal" }[]; created: string };
 /** AI plan for the day, plus a box to hand anything to the assistant. */
 function DailyBrief() {
-  const { openEntry, askAssistant } = useDesk();
+  const { openEntry, askAssistant, data } = useDesk();
   const [brief, setBrief] = useState<Brief | null>(null), [configured, setConfigured] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState(""), [ask, setAsk] = useState("");
   async function generate() {
     setBusy(true); setError("");
@@ -107,18 +109,18 @@ function DailyBrief() {
     // First visit of the day generates the brief; later visits read the cached one.
     fetch("/api/brief", { cache: "no-store" }).then(r => readJson<{ brief: Brief | null; configured: boolean }>(r)).then(d => {
       if (!active) return; setConfigured(d.configured); setBrief(d.brief);
-      if (!d.brief && d.configured) { setBusy(true); postJson<{ brief: Brief }>("/api/brief", {}).then(r => { if (active) setBrief(r.brief); }).catch(e => { if (active) setError((e as Error).message); }).finally(() => { if (active) setBusy(false); }); }
+      if (!d.brief) { setBusy(true); postJson<{ brief: Brief }>("/api/brief", {}).then(r => { if (active) setBrief(r.brief); }).catch(e => { if (active) setError((e as Error).message); }).finally(() => { if (active) setBusy(false); }); }
     }).catch(e => { if (active) setError((e as Error).message); });
     return () => { active = false; };
-  }, []);
+  }, [data]);
   return <section className="overflow-hidden rounded-xl border border-primary/15 bg-gradient-to-br from-accent/70 via-card to-card shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
     <div className="flex items-start gap-3 px-4 pt-4">
       <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground"><Sparkles className="size-4" /></span>
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium text-accent-foreground/80">AI 今日建议</p>
-        <p className="mt-0.5 text-[15px] font-semibold">{busy && !brief ? "正在看今天的安排…" : brief?.headline || (configured ? error || "还没有生成今天的建议" : "配置 AI 模型后，这里每天会给出当天的行动建议")}</p>
+        <p className="text-xs font-medium text-accent-foreground/80">{configured ? "AI 今日建议" : "今日建议 · 根据记录生成"}</p>
+        <p className="mt-0.5 text-[15px] font-semibold">{busy && !brief ? "正在看今天的安排…" : brief?.headline || error || "还没有生成今天的建议"}</p>
       </div>
-      {configured && <Button variant="ghost" size="icon-sm" aria-label="重新生成" disabled={busy} onClick={() => void generate()}>{busy ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}</Button>}
+      <Button variant="ghost" size="icon-sm" aria-label="重新生成" disabled={busy} onClick={() => void generate()}>{busy ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}</Button>
     </div>
     {brief && brief.items.length > 0 && <ol className="mt-2 flex flex-col px-4">{brief.items.map((item, i) => <li key={i} className="flex items-start gap-2.5 py-1.5 text-sm">
       <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", item.priority === "high" ? "bg-red-500" : "bg-primary/50")} />

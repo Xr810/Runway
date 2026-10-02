@@ -3,7 +3,9 @@ import { useRef, useState } from "react";
 import { CalendarClock, Clock3, Download, Flag, LoaderCircle as Spinner, MoreHorizontal, Trash2, ExternalLink, FileText, History, LoaderCircle, Paperclip, Pencil, Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { type Entry, score, statusesFor } from "@/lib/model";
-import { appointmentDate, appointmentTime } from "@/lib/appointments";
+import { appointmentDate, appointmentTime, stageProgress } from "@/lib/appointments";
+import { recruitingReminders } from "@/lib/recruiting-reminders";
+import { today } from "@/lib/model";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -87,17 +89,18 @@ export default function EntryDetail() {
                 </div>}
                 <div className="grid grid-cols-3 gap-2"><DateCell label={copy.deadline} value={entry.deadline} /><DateCell label={copy.followUp} value={entry.followUp} /><DateCell label={copy.applied} value={entry.applied} /></div>
                 {entry.appointments.length > 0 && <Section title="面试与笔试">
-                  <ul className="flex flex-col gap-2">{entry.appointments.toSorted((a, b) => a.startsAt.localeCompare(b.startsAt)).map(item => <li key={item.id} className="flex gap-3 rounded-lg border bg-card px-3 py-2.5">
+                  <ul className="flex flex-col gap-2">{entry.appointments.toSorted((a, b) => a.startsAt.localeCompare(b.startsAt)).map(item => { const due = recruitingReminders([entry], data.reminderPreferences).find(reminder => reminder.appointmentId === item.id)?.date, progress = stageProgress(item, today(), due); return <li key={item.id} className="flex gap-3 rounded-lg border bg-card px-3 py-2.5">
                     <CalendarClock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0 flex-1"><p className="text-sm font-medium">{item.title}</p><p className="text-xs text-muted-foreground">{formatDay(appointmentDate(item.startsAt))} {appointmentTime(item.startsAt)}{item.endsAt ? "–" + appointmentTime(item.endsAt) : ""} · 新加坡时间{item.location ? " · " + item.location : ""}</p>{item.url && <a className="text-xs text-primary hover:underline" href={item.url} target="_blank" rel="noreferrer">打开日程链接</a>}</div>
+                    <div className="min-w-0 flex-1"><p className="text-sm font-medium">{item.title}</p>
+                      <p className="text-xs text-muted-foreground">{item.type === "assessment" ? `通知 ${formatDay(item.receivedDate)} · 截止 ${formatDay(item.deadlineDate)}${item.completedAt ? ` · 完成 ${formatDay(appointmentDate(item.completedAt))}` : ""}` : `${formatDay(appointmentDate(item.startsAt))} ${appointmentTime(item.startsAt)}${item.endsAt ? "–" + appointmentTime(item.endsAt) : ""} · 香港时间`}{item.location ? " · " + item.location : ""}</p>
+                      <div className="mt-1 h-1.5 overflow-hidden rounded bg-muted"><div className="h-full bg-primary" style={{width: `${progress.percent}%`}} /></div><p className="mt-1 text-xs text-muted-foreground">{progress.label}</p>{item.url && <a className="text-xs text-primary hover:underline" href={item.url} target="_blank" rel="noreferrer">打开日程链接</a>}</div>
                     <Pill tone={item.status === "completed" ? "green" : item.status === "cancelled" ? "gray" : "blue"}>{appointmentStatus[item.status]}</Pill>
-                  </li>)}</ul>
+                  </li>})}</ul>
                 </Section>}
                 <Section title="详情">
                   <Facts items={isJob ? [
                     { label: "投递渠道", value: entry.applicationChannel },
                     { label: "投递链接", value: entry.applicationUrl && <a className="inline-flex items-center gap-1 text-primary hover:underline" href={entry.applicationUrl} target="_blank" rel="noreferrer">打开<ExternalLink className="size-3" /></a> },
-                    { label: "地区", value: entry.region },
                     { label: "工作地点", value: entry.location },
                     { label: "工作模式", value: entry.workMode },
                     { label: "岗位类型", value: entry.employmentType },

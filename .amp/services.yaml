@@ -4,5 +4,5 @@ services:
     health: /api/health
     portal:
       title: Runway
-      description: Sign in with the orb-only development password runway-orb-dev.
+      description: Register a local email/password account. Google login is unavailable unless OAuth credentials are configured.
     agent: control

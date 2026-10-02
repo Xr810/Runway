@@ -1,11 +1,11 @@
 import {z} from "zod";
-import {entrySchema,jobStatuses,regions,workModes,employmentTypes,schedules,companyTypes,type Entry} from "./model";
+import {entrySchema,jobStatuses,workModes,employmentTypes,schedules,companyTypes,type Entry} from "./model";
 import {appointmentSchema} from "./appointments";
 const id=z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/);
 const web=z.string().max(4000).refine(v=>!v||URL.canParse(v)&&/^https?:\/\//i.test(v)&&!new URL(v).username&&!new URL(v).password).default("");
 export const sourceSchema=z.object({kind:z.enum(["website","email","manual"]),id:z.string().trim().min(1).max(500),url:web,subject:z.string().max(500).default(""),occurredAt:z.string().datetime({offset:true})}).strict();
 const choice=(values:string[])=>z.string().refine(value=>values.includes(value),"无效的岗位属性");
-const fields={title:z.string().trim().min(1).max(500),organization:z.string().trim().min(1).max(2000),url:web,location:z.string().max(2000),status:z.enum(jobStatuses as [string,...string[]]),deadline:z.string(),applied:z.string(),followUp:z.string(),nextAction:z.string().max(2000),salary:z.string().max(2000),summary:z.string().max(100000),jd:z.string().max(300000),applicationChannel:z.string().max(100),applicationUrl:web,region:choice(regions),workMode:choice(workModes),employmentType:choice(employmentTypes),schedule:choice(schedules),companyType:choice(companyTypes),companyBasis:z.string().max(2000),companySource:web,priority:z.enum(["","高","中","低"])};
+const fields={title:z.string().trim().min(1).max(500),organization:z.string().trim().min(1).max(2000),url:web,location:z.string().max(2000),status:z.enum(jobStatuses as [string,...string[]]),deadline:z.string(),applied:z.string(),followUp:z.string(),nextAction:z.string().max(2000),salary:z.string().max(2000),summary:z.string().max(100000),jd:z.string().max(300000),applicationChannel:z.string().max(100),applicationUrl:web,workMode:choice(workModes),employmentType:choice(employmentTypes),schedule:choice(schedules),companyType:choice(companyTypes),companyBasis:z.string().max(2000),companySource:web,priority:z.enum(["","高","中","低"])};
 const base={requestId:z.string().trim().min(1).max(200),summary:z.string().trim().min(1).max(2000),source:sourceSchema};
 export const integrationEventSchema=z.discriminatedUnion("action",[
  z.object({...base,action:z.literal("create_job"),externalId:z.string().trim().min(1).max(500),job:z.object(fields).partial().required({title:true,organization:true,url:true}).strict()}).strict(),

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { agentActionSchema, prepareAgentActions, type AgentDraft, type AgentSnapshot } from "./agent-contract";
-import { blankEntry, defaultJobDeadline, defaultNextAction, entrySchema, progressSchema, closed, type Entry, regions, workModes, employmentTypes, schedules, companyTypes, jobStatuses, competitionStatuses, projectStatuses } from "./model";
+import { blankEntry, defaultJobDeadline, defaultNextAction, entrySchema, progressSchema, closed, type Entry, workModes, employmentTypes, schedules, companyTypes, jobStatuses, competitionStatuses, projectStatuses } from "./model";
 import { describeSchedule, reminderSchema, scheduleSchema, type Reminder } from "./reminder-schema";
 import { blankWatch, watchSchema, type CompanyWatch } from "./watches";
 import { channelSchema, companyProfileSchema } from "./journey";
@@ -12,7 +12,7 @@ export const aiFilterSchema = z.object({
   kind: z.enum(["job", "competition", "project", "all"]).default("job"),
   keywords: z.array(z.string().min(1).max(100)).max(12).default([]),
   statuses: z.array(z.string().refine(s => [...jobStatuses, ...competitionStatuses, ...projectStatuses].includes(s))).max(20).default([]),
-  region: z.string().refine(s => !s || regions.includes(s)).default(""),
+  location: z.string().max(2000).default(""),
   workMode: z.string().refine(s => !s || workModes.includes(s)).default(""),
   employmentType: z.string().refine(s => !s || employmentTypes.includes(s)).default(""),
   schedule: z.string().refine(s => !s || schedules.includes(s)).default(""),
@@ -27,7 +27,8 @@ export function matchesAiFilter(entry: Entry, filter: AiFilter) {
   return (filter.kind === "all" || entry.kind === filter.kind)
     && (!filter.keywords.length || filter.keywords.some(k => haystack.includes(k.toLowerCase())))
     && (!filter.statuses.length || filter.statuses.includes(entry.status))
-    && (["region", "workMode", "employmentType", "schedule", "companyType"] as const).every(k => !filter[k] || entry[k] === filter[k])
+    && (!filter.location || entry.location.toLowerCase().includes(filter.location.toLowerCase()))
+    && (["workMode", "employmentType", "schedule", "companyType"] as const).every(k => !filter[k] || entry[k] === filter[k])
     && (!filter.excludeClosed || !closed(entry))
     && (!filter.deadlineFrom || !!entry.deadline && entry.deadline >= filter.deadlineFrom)
     && (!filter.deadlineTo || !!entry.deadline && entry.deadline <= filter.deadlineTo);
@@ -47,7 +48,7 @@ const profileProposal = z.object({
 const watchProposal = z.object({
   operation: z.enum(["add", "update"]), targetId: z.string().max(100).optional(), kind: z.enum(["company", "board"]).optional(),
   company: z.string().max(200).optional(), url: z.string().max(4000).optional(), keywords: z.string().max(2000).optional(), excludeKeywords: z.string().max(2000).optional(),
-  regions: z.array(z.string()).optional(), employmentTypes: z.array(z.string()).optional(), workModes: z.array(z.string()).optional(), schedules: z.array(z.string()).optional(),
+  locations: z.array(z.string().trim().min(1).max(200)).max(30).optional(), employmentTypes: z.array(z.string()).optional(), workModes: z.array(z.string()).optional(), schedules: z.array(z.string()).optional(),
   enabled: z.boolean().optional(),
 }).strict();
 const directoryProposal = z.object({
@@ -123,7 +124,7 @@ export function prepareAiReply(raw: unknown, entries: Entry[], imageIds: string[
     if (p.operation === "update" && !old) throw Error("AI 提到的关注项不存在，请重新说明。");
     const clean = <T extends string>(values: T[] | undefined, allowed: string[]) => values?.filter(v => allowed.includes(v));
     const watch = watchSchema.parse({ ...(old ?? blankWatch(p.kind ?? "company")), ...Object.fromEntries(Object.entries({ ...p,
-      regions: clean(p.regions, regions), employmentTypes: clean(p.employmentTypes, employmentTypes), workModes: clean(p.workModes, workModes), schedules: clean(p.schedules, schedules),
+      locations: p.locations, employmentTypes: clean(p.employmentTypes, employmentTypes), workModes: clean(p.workModes, workModes), schedules: clean(p.schedules, schedules),
     }).filter(([k, v]) => !["operation", "targetId"].includes(k) && v !== undefined)) });
     return { id: crypto.randomUUID(), operation: p.operation, watch };
   });

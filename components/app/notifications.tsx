@@ -8,7 +8,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { useDesk, readJson, postJson, type NoticeFeed } from "./store";
 import { EmptyState, Pill, Segmented, stamp, type Tone } from "./ui";
 
-const labels: Record<string, string> = { evaluation: "评估分数", logo: "官方图标", status: "状态", title: "岗位", organization: "公司", appointments: "面试 / 笔试", nextAction: "下一步", deadline: "截止日期", followUp: "跟进日期", applied: "投递日期", notes: "备注", url: "岗位链接", jd: "JD 原文", summary: "摘要", applicationChannel: "投递渠道", applicationUrl: "投递链接", location: "地点", salary: "薪资", region: "地区", workMode: "工作模式", employmentType: "岗位类型", schedule: "工作时间", companyType: "公司类型", companyBasis: "分类依据", companySource: "分类来源", priority: "优先级", jdStatus: "原文完整度" };
+const labels: Record<string, string> = { evaluation: "评估分数", logo: "官方图标", status: "状态", title: "岗位", organization: "公司", appointments: "面试 / 笔试", nextAction: "下一步", deadline: "截止日期", followUp: "跟进日期", applied: "投递日期", notes: "备注", url: "岗位链接", jd: "JD 原文", summary: "摘要", applicationChannel: "投递渠道", applicationUrl: "投递链接", location: "工作地点", salary: "薪资", workMode: "工作模式", employmentType: "岗位类型", schedule: "工作时间", companyType: "公司类型", companyBasis: "分类依据", companySource: "分类来源", priority: "优先级", jdStatus: "原文完整度" };
 const actions: Record<string, { label: string; tone: Tone }> = { assessment: { label: "岗位评估", tone: "violet" }, brand: { label: "图标", tone: "gray" }, create_job: { label: "新岗位", tone: "green" }, notify: { label: "待核对", tone: "amber" }, update_job: { label: "申请更新", tone: "blue" } };
 const sources: Record<string, string> = { email: "邮件", website: "招聘网站", manual: "手动同步" };
 function display(value: unknown) {

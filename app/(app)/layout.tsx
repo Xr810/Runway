@@ -5,6 +5,6 @@ import Shell from "@/components/app/shell";
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  await requireUser();
-  return <DeskProvider><Shell>{children}</Shell></DeskProvider>;
+  const user = await requireUser();
+  return <DeskProvider key={user.userId}><Shell userId={user.userId}>{children}</Shell></DeskProvider>;
 }

@@ -15,13 +15,17 @@ export async function GET() {
 export async function POST(request:Request) {
   if (!await getUser()) return json({error:"请先登录"},401);
   if (!validOrigin(request)) return json({error:"请求来源无效"},403);
+  const policy=await getAiConfig().catch(()=>null);
+  if(!policy)return json({error:"读取 AI 策略失败，请稍后重试。"},503);
+  if(!policy.enabled)return json({error:"此账户未启用 AI。"},403);
+  if(policy.mode!=="personal")return json({error:"托管 AI 配置由部署管理员维护。"},403);
   let input;
   try { const reader=request.body?.getReader(); if(!reader)throw Error(); const chunks:Uint8Array[]=[];let bytes=0;
     while(true){const {value,done}=await reader.read();if(done)break;bytes+=value.length;if(bytes>16000){await reader.cancel();return json({error:"请求过大"},413)}chunks.push(value)}
     input=schema.parse(JSON.parse(Buffer.concat(chunks).toString("utf8")));
   } catch {return json({error:"设置格式无效，请检查输入。"},400)}
   try {
-    const current=await getAiConfig();
+    const current=policy;
     if(input.revision!==current.revision)return json({error:"设置已在其他窗口更新，请重新加载。"},409);
     const config=resolveConfig(input,current);
     if(input.action!=="models"&&!config.model)return json({error:"请选择模型或填写模型 ID。"},400);

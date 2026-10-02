@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useDesk, readJson } from "../store";
 import { Panel, Pill } from "../ui";
 
-type Config = { base: string; model: string; hasKey: boolean; hasTavilyKey: boolean; revision: number; source: string; configured: boolean };
+type Config = { base: string; model: string; hasKey: boolean; hasTavilyKey: boolean; revision: number; source: string; configured: boolean; mode: "personal" | "managed"; enabled: boolean; editable: boolean };
 
 export default function AiSettings() {
   const { setGuard } = useDesk();
@@ -35,9 +35,11 @@ export default function AiSettings() {
   return <div className="flex flex-col gap-5">
     <div><h2 className="text-lg font-semibold">AI 模型</h2><p className="mt-1 text-sm text-muted-foreground">AI 助手使用的模型服务，支持任意 OpenAI 兼容 API。截图识别需要支持图片输入的模型。</p></div>
     {saved && <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card px-4 py-3 text-sm"><span className={saved.configured ? "size-2 rounded-full bg-emerald-500" : "size-2 rounded-full bg-amber-500"} />当前模型 <b className="font-medium">{saved.model || "未选择"}</b><Pill className="ml-auto">{saved.source === "environment" ? "部署默认配置" : "网站设置"}</Pill></div>}
+    {saved && !saved.enabled && <div role="status" className="rounded-lg border px-4 py-3 text-sm text-muted-foreground">此账户未启用 AI。AI 助手、联网搜索和自动补全均不可用。</div>}
+    {saved?.enabled && saved.mode === "managed" && <div role="status" className="rounded-lg border px-4 py-3 text-sm text-muted-foreground">AI 由部署管理员统一配置。个人设置、连接测试和模型列表不可用；密钥不会在此页面显示。</div>}
     {error && <div role="alert" className="flex items-center justify-between rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-400/10 dark:text-red-300">{error}{!saved && <Button size="xs" variant="outline" onClick={() => void load()}>重试</Button>}</div>}
     {notice && <div role="status" className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300"><Check className="size-4" />{notice}</div>}
-    {busy === "load" ? <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />正在读取…</div> : saved && <>
+    {busy === "load" ? <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />正在读取…</div> : saved?.editable && <>
       <Panel title="连接" description="填写接口根地址和密钥。修改不会影响已有记录。">
         <div className="flex flex-col gap-4">
           <div className="grid gap-1.5"><Label htmlFor="ai-base">API Base URL</Label><Input id="ai-base" type="url" value={base} disabled={busy === "save"} placeholder="https://api.example.com/v1" autoComplete="off" spellCheck={false} onChange={e => { changeConnection(); setBase(e.target.value); if (e.target.value !== saved.base) setEditingKey(true); }} /><p className="text-[11px] text-muted-foreground">通常以 /v1 结尾，不要包含 /chat/completions。</p></div>

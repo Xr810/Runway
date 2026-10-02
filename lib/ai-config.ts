@@ -1,7 +1,8 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
-import { pool } from "./postgres";
+import { controlPool, currentUserId, pool } from "./postgres";
 
-export type AiConfig = { base: string; key: string; model: string; tavilyKey?: string; revision: number; source: "environment" | "settings" };
+export type AiMode = "personal" | "managed";
+export type AiConfig = { base: string; key: string; model: string; tavilyKey?: string; revision: number; source: "environment" | "settings" | "none"; mode?: AiMode; enabled?: boolean };
 export const settingsKey = "ai-settings-v1";
 export function normalizeBase(value: string) {
   let url: URL;
@@ -37,29 +38,40 @@ export function openKey(value: string) {
   throw Error("无法解密已保存的 API Key，请在设置中重新填写。");
 }
 export async function getAiConfig(): Promise<AiConfig> {
+  const userId = await currentUserId();
+  const account = await controlPool.query("SELECT ai_enabled FROM accounts WHERE id=$1", [userId]);
+  const enabled = account.rows[0]?.ai_enabled === true;
+  const mode: AiMode = process.env.AI_MODE === "managed" ? "managed" : "personal";
+  if (!enabled) return { base: "", key: "", model: "", tavilyKey: "", revision: 0, source: "none", mode, enabled: false };
+  if (mode === "managed") return { base: process.env.AI_BASE_URL || "", key: process.env.AI_API_KEY || "", model: process.env.AI_MODEL || "", tavilyKey: process.env.TAVILY_API_KEY || "", revision: 0, source: "environment", mode, enabled };
   const row = await pool.query("SELECT value FROM meta WHERE key=$1", [settingsKey]);
-  if (!row.rowCount) return { base: process.env.AI_BASE_URL || "", key: process.env.AI_API_KEY || "", model: process.env.AI_MODEL || "", tavilyKey: process.env.TAVILY_API_KEY || "", revision: 0, source: "environment" };
+  if (!row.rowCount) return { base: "", key: "", model: "", tavilyKey: "", revision: 0, source: "none", mode, enabled };
   const saved = JSON.parse(row.rows[0].value), opened = openKey(saved.encryptedKey);
-  if (opened.stale) await pool.query("UPDATE meta SET value=$2 WHERE key=$1", [settingsKey, JSON.stringify({ ...saved, encryptedKey: sealKey(opened.value) })]);
-  let tavilyKey = process.env.TAVILY_API_KEY || "";
+  if (opened.stale) await pool.query("UPDATE meta SET value=$3 WHERE user_id=$1 AND key=$2", [userId, settingsKey, JSON.stringify({ ...saved, encryptedKey: sealKey(opened.value) })]);
+  let tavilyKey = "";
   if (typeof saved.encryptedTavilyKey === "string" && saved.encryptedTavilyKey) {
     try { tavilyKey = openKey(saved.encryptedTavilyKey).value; } catch { /* preserve AI settings availability if optional Tavily key is stale */ }
   }
-  return { base: saved.base, key: opened.value, model: saved.model, tavilyKey, revision: saved.revision, source: "settings" };
+  return { base: saved.base, key: opened.value, model: saved.model, tavilyKey, revision: saved.revision, source: "settings", mode, enabled };
 }
 export function publicAiConfig(config: AiConfig) {
-  return { base: config.base, model: config.model, revision: config.revision, source: config.source, hasKey: !!config.key, hasTavilyKey: !!config.tavilyKey, configured: !!(config.base && config.key && config.model) };
+  const mode = config.mode ?? "personal", enabled = config.enabled !== false;
+  return { base: mode === "personal" ? config.base : "", model: config.model, revision: config.revision, source: config.source, mode, enabled, editable: enabled && mode === "personal", hasKey: mode === "personal" && !!config.key, hasTavilyKey: mode === "personal" && !!config.tavilyKey, configured: enabled && !!(config.base && config.key && config.model) };
 }
 export function resolveConfig(input: { base: string; apiKey?: string; tavilyApiKey?: string; model?: string }, current: AiConfig): AiConfig {
   const base = normalizeBase(input.base), key = input.apiKey?.trim();
   if (!key && (!current.key || base !== normalizeBase(current.base))) throw Error("更换 API 地址时，请同时填写该地址对应的 API Key。");
-  return { base, key: key || current.key, model: input.model?.trim() || "", tavilyKey: input.tavilyApiKey?.trim() || current.tavilyKey || "", revision: current.revision, source: "settings" };
+  if (current.enabled === false) throw Error("此账户未启用 AI。");
+  if (current.mode === "managed") throw Error("托管 AI 配置由部署管理员维护。");
+  return { base, key: key || current.key, model: input.model?.trim() || "", tavilyKey: input.tavilyApiKey?.trim() || current.tavilyKey || "", revision: current.revision, source: "settings", mode: current.mode, enabled: true };
 }
 export async function saveAiConfig(config: AiConfig, revision: number) {
+  if (config.enabled === false || config.mode === "managed") throw Error("当前 AI 策略不允许保存个人配置。");
+  const userId = await currentUserId();
   const value = JSON.stringify({ base: config.base, model: config.model, encryptedKey: sealKey(config.key), encryptedTavilyKey: config.tavilyKey ? sealKey(config.tavilyKey) : null, revision: revision + 1 });
   const saved = revision === 0
-    ? await pool.query("INSERT INTO meta(key,value) VALUES($1,$2) ON CONFLICT(key) DO NOTHING RETURNING value", [settingsKey, value])
-    : await pool.query("UPDATE meta SET value=$2 WHERE key=$1 AND (value::jsonb->>'revision')::int=$3 RETURNING value", [settingsKey, value, revision]);
+    ? await pool.query("INSERT INTO meta(user_id,key,value) VALUES($1,$2,$3) ON CONFLICT(user_id,key) DO NOTHING RETURNING value", [userId, settingsKey, value])
+    : await pool.query("UPDATE meta SET value=$3 WHERE user_id=$1 AND key=$2 AND (value::jsonb->>'revision')::int=$4 RETURNING value", [userId, settingsKey, value, revision]);
   if (!saved.rowCount) throw Error("设置已在其他窗口更新，请重新加载后再保存。");
   return { ...config, revision: revision + 1 };
 }

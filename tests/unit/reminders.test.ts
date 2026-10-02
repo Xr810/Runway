@@ -26,11 +26,11 @@ test("reminder and watch schemas reject bad input", () => {
   assert(!reminderSchema.safeParse({ ...base, title: " " }).success);
   assert(!reminderSchema.safeParse({ ...base, url: "javascript:alert(1)" }).success);
   assert(!reminderSchema.safeParse({ ...base, schedule: { type: "weekly", days: [8], time: "" } }).success);
-  const watch = { ...blankWatch(), company: "Test company", url: "https://example.com/jobs", regions: ["中国香港"], enabled: false };
+  const watch = { ...blankWatch(), company: "Test company", url: "https://example.com/jobs", locations: ["香港"], enabled: false };
   assert.deepEqual(watchSchema.parse(watch), watch);
   assert.equal(watchSchema.parse({ ...watch, kind: undefined }).kind, "company", "older watches default to company pages");
   assert(!watchSchema.safeParse({ ...watch, url: "javascript:alert(1)" }).success);
-  assert(!watchSchema.safeParse({ ...watch, regions: ["invalid"] }).success);
+  assert(!watchSchema.safeParse({ ...watch, locations: [""] }).success);
   assert(!watchSchema.safeParse({ ...watch, kind: "rss" }).success);
 });
 test("saving a reminder drops derived list fields without weakening its stored schema", () => {

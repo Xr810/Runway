@@ -12,15 +12,15 @@ test("company AI failures are reported and retried after cooldown instead of wai
   const directory = { companies: [{ name: "Example", website: "https://example.org", logoUrl: "https://example.org/logo.png" }], channels: [] };
   const loaded = loadModule<{ completeCompanies(): Promise<{ updated: number }> }>(new URL("../../lib/company-complete.ts", import.meta.url), {
     zod: { z }, "./model": model, "./journey": journey,
-    "./postgres": { pool: { query: async (sql: string, values: string[]) => {
+    "./postgres": { currentUserId: async () => "00000000-0000-0000-0000-000000000001", runAsUser: (_id: string, work: () => unknown) => work(), pool: { query: async (sql: string, values: string[]) => {
       if (sql.startsWith("SELECT")) return { rows: [{ value: JSON.stringify(attempts) }] };
-      Object.assign(attempts, JSON.parse(values[1])); return { rows: [] };
+      Object.assign(attempts, JSON.parse(values.at(-1)!)); return { rows: [] };
     } } },
     "./directory-storage": { getDirectory: async () => directory },
     "./entries": { listEntries: async () => [entry], patchEntry: async (_id: string, _revision: number, patch: object) => Object.assign(entry, patch) },
     "./watch-storage": { allWatches: async () => [] },
     "./ai-client": { aiJson: async () => { calls++; if (fail) throw Error("fixture 503"); return { companyType: "外企", basis: "Fixture only", confidence: "high" }; } },
-    "./web": {}, "./brand-scan": {},
+    "./web": { readPage: async () => ({ url: "https://example.org", title: "Example", text: "Example company", links: [], postings: [] }) }, "./ai-config": { getAiConfig: async () => ({ tavilyKey: "" }) }, "./tavily": { searchTavily: async () => [] }, "./brand-scan": {},
     "./enrichment": { enrichmentFeed: async () => ({ states: [] }), syncEnrichment: async () => {} },
     "./notifications": { notify: async () => {} },
   });

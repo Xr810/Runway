@@ -1,5 +1,5 @@
 import { enrichmentFeed } from "./enrichment";
-import { pool } from "./postgres";
+import { controlPool, pool, runAsUser } from "./postgres";
 import { runScan } from "./scanner";
 import { completeCompanies } from "./company-complete";
 import { startBuiltinEnrichment, waitBuiltinEnrichment } from "./builtin-enrichment";
@@ -11,16 +11,18 @@ const runtime = globalThis as unknown as { runwayAgentJobs?: boolean; runwayAgen
 export async function runAgentJobs() {
   if (runtime.runwayAgentJobs) return;
   runtime.runwayAgentJobs = true;
-  const client = await pool.connect().catch(e => { runtime.runwayAgentJobs = false; throw e; });
+  const client = await controlPool.connect().catch(e => { runtime.runwayAgentJobs = false; throw e; });
   let locked = false;
   try {
     locked = (await client.query("SELECT pg_try_advisory_lock(28402032) AS ok")).rows[0].ok;
     if (!locked) return;
     // Holding the session lock proves no other live worker owns these jobs.
-    await client.query("UPDATE agent_jobs SET status='interrupted',error='服务重启时任务中断，请先查看业务结果，再重新发起未完成部分。',updated=now() WHERE status='running'");
-    const jobs = (await client.query("SELECT id,kind,payload FROM agent_jobs WHERE status='pending' ORDER BY created LIMIT 5")).rows;
-    for (const job of jobs) {
-      await client.query("UPDATE agent_jobs SET status='running',updated=now() WHERE id=$1", [job.id]);
+    const users = (await client.query("SELECT id::text FROM accounts ORDER BY id")).rows;
+    for (const user of users) await runAsUser(user.id, async () => {
+      await pool.query("UPDATE agent_jobs SET status='interrupted',error='服务重启时任务中断，请先查看业务结果，再重新发起未完成部分。',updated=now() WHERE status='running'");
+      const jobs = (await pool.query("SELECT id,kind,payload FROM agent_jobs WHERE status='pending' ORDER BY created LIMIT 5")).rows;
+      for (const job of jobs) {
+      await pool.query("UPDATE agent_jobs SET status='running',updated=now() WHERE id=$1", [job.id]);
       try {
         let result: unknown;
         if (job.kind === "scan") result = await runScan("manual", z.array(z.string()).optional().parse(job.payload.watchIds));
@@ -35,9 +37,10 @@ export async function runAgentJobs() {
         }
         else if (job.kind === "brief") result = await generateBrief();
         else throw Error("未知任务类型");
-        await client.query("UPDATE agent_jobs SET status='completed',result=$2,updated=now() WHERE id=$1", [job.id, JSON.stringify(result ?? { ok: true })]);
-      } catch (e) { await client.query("UPDATE agent_jobs SET status='failed',error=$2,updated=now() WHERE id=$1", [job.id, (e as Error).message.slice(0, 1500)]); }
-    }
+        await pool.query("UPDATE agent_jobs SET status='completed',result=$2,updated=now() WHERE id=$1", [job.id, JSON.stringify(result ?? { ok: true })]);
+      } catch (e) { await pool.query("UPDATE agent_jobs SET status='failed',error=$2,updated=now() WHERE id=$1", [job.id, (e as Error).message.slice(0, 1500)]); }
+      }
+    });
   } finally { if (locked) await client.query("SELECT pg_advisory_unlock(28402032)").catch(() => {}); client.release(); runtime.runwayAgentJobs = false; }
 }
 export function startAgentWorker() {

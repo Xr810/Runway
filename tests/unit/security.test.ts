@@ -1,25 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { scryptSync } from "node:crypto";
 
 process.env.SESSION_SECRET = "a".repeat(64);
 process.env.APP_ORIGIN = "https://runway.example.com";
-const salt = "b".repeat(32);
-process.env.LOGIN_PASSWORD_HASH = salt + ":" + scryptSync("test-password", salt, 64).toString("hex");
-const { createSession, validSession, validPassword, validOrigin, sessionSeconds, clientIp } = await import("../../lib/session");
+const { randomToken, tokenHash, validOrigin, sessionSeconds, clientIp, cookieOptions } = await import("../../lib/session");
 const { normalizeBase, sealKey, openKey, publicAiConfig, resolveConfig } = await import("../../lib/ai-config");
 const { publicAddress, checkEndpoint } = await import("../../lib/ai-http");
 const { publicFetch } = await import("../../lib/web");
 
-test("sessions expire, resist tampering and follow the session version", async () => {
-  const now = Date.now(), session = createSession(0, now);
-  assert.equal(validSession(session, 0, now), true);
-  assert.equal(validSession(session, 0, now + (sessionSeconds + 1) * 1000), false);
-  assert.equal(validSession(session.slice(0, -4) + "abcd", 0, now), false);
-  assert.equal(validSession(session, 1, now), false, "bumping the version signs everyone out");
-  assert.equal(validSession(createSession(3, now), 3, now), true);
-  assert.equal(validSession(undefined), false);
-  assert.equal(await validPassword("test-password"), true); assert.equal(await validPassword("wrong"), false); assert.equal(await validPassword(null), false);
+test("session tokens are opaque, hashed for storage, and cookies are hardened", () => {
+  const session = randomToken();
+  assert.match(session, /^[A-Za-z0-9_-]{43}$/);
+  assert.equal(tokenHash(session).length, 32);
+  assert.equal(sessionSeconds, 7 * 24 * 60 * 60);
+  assert.deepEqual(cookieOptions(), { httpOnly: true, sameSite: "lax", secure: true, path: "/" });
   assert.equal(validOrigin(new Request("http://internal/api", { headers: { origin: "https://runway.example.com" } })), true);
   assert.equal(validOrigin(new Request("http://internal/api", { headers: { origin: "https://evil.example", "x-forwarded-host": "runway.example.com" } })), false);
   assert.equal(clientIp(new Request("http://x/", { headers: { "cf-connecting-ip": "203.0.113.9", "x-forwarded-for": "1.1.1.1" } })), "203.0.113.9");

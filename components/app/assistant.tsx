@@ -9,14 +9,14 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useDesk, readJson } from "./store";
 import { Pill } from "./ui";
+import { assistantCacheDatabase } from "./assistant-cache";
 type Picture = { id: string; name: string; original: string; dataUrl: string };
 type Message = { id: string; role: "user" | "assistant"; text: string; images?: Picture[]; runId?: string; run?: AgentRunReply };
 type Capability = { module: string; label: string; operations: string[]; fields: string[] };
 type RunSummary = { id: string; status: string; prompt: string; error: string };
-const cacheKey = "opportunity-ai-chat-v1";
-async function chatCache(value?: Message[]): Promise<Message[]> {
+async function chatCache(userId: string, value?: Message[]): Promise<Message[]> {
   const db = await new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(cacheKey, 1);
+    const request = indexedDB.open(assistantCacheDatabase(userId), 1);
     request.onupgradeneeded = () => request.result.createObjectStore("chat");
     request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
   });
@@ -46,9 +46,9 @@ async function readPicture(file: File): Promise<Picture> {
     return { id: crypto.randomUUID(), name: file.name.slice(0, 180), original, dataUrl };
   } finally { bitmap.close(); }
 }
-const fieldNames: Record<string, string> = { appointments: "面试 / 笔试日程", extra: "自定义字段", archived: "归档状态", payments: "收入记录", enabled: "启用", time: "时间", maxAddPerWatch: "每次最多加入", model: "模型", cvText: "简历文字", background: "个人背景", goals: "职业目标", targets: "求职方向", preferences: "偏好", day: "日期", done: "完成状态", item: "目录资料", jdStatus: "JD 存档状态", applicationChannel: "投递渠道", applicationUrl: "投递链接", progress: "比赛进度", title: "名称", organization: "公司 / 主办方", kind: "类型", status: "状态", location: "地点", region: "地区", workMode: "工作模式", employmentType: "岗位类型", schedule: "工作时间", companyType: "公司类型", companyBasis: "分类依据", companySource: "依据链接", url: "原始链接", deadline: "截止日期", applied: "投递日期", followUp: "跟进日期", nextAction: "下一步", salary: "薪资 / 奖励", priority: "优先级", summary: "摘要", jd: "原文摘录", notes: "备注", fit: "匹配度", career: "职业发展", outlook: "公司前景" };
+const fieldNames: Record<string, string> = { appointments: "面试 / 笔试日程", extra: "自定义字段", archived: "归档状态", payments: "收入记录", enabled: "启用", time: "时间", maxAddPerWatch: "每次最多加入", model: "模型", cvText: "简历文字", background: "个人背景", goals: "职业目标", targets: "求职方向", preferences: "偏好", day: "日期", done: "完成状态", item: "目录资料", jdStatus: "JD 存档状态", applicationChannel: "投递渠道", applicationUrl: "投递链接", progress: "比赛进度", title: "名称", organization: "公司 / 主办方", kind: "类型", status: "状态", location: "工作地点", workMode: "工作模式", employmentType: "岗位类型", schedule: "工作时间", companyType: "公司类型", companyBasis: "分类依据", companySource: "依据链接", url: "原始链接", deadline: "截止日期", applied: "投递日期", followUp: "跟进日期", nextAction: "下一步", salary: "薪资 / 奖励", priority: "优先级", summary: "摘要", jd: "原文摘录", notes: "备注", fit: "匹配度", career: "职业发展", outlook: "公司前景" };
 
-export default function Assistant() {
+export default function Assistant({ userId }: { userId: string }) {
   const pathname = usePathname();
   const { selected, assistantOpen: open, setAssistantOpen, reload, reloadReminders, applyAiFilter, aiFilter, takePrefill, assistantPrefill } = useDesk();
   const [messages, setMessages] = useState<Message[]>([]), [text, setText] = useState(""), [pictures, setPictures] = useState<Picture[]>([]);
@@ -59,10 +59,10 @@ export default function Assistant() {
   const abort = useRef<AbortController | null>(null), busy = useRef(false), inputRef = useRef<HTMLTextAreaElement>(null), uploadRef = useRef<HTMLInputElement>(null), scrollRef = useRef<HTMLDivElement>(null), cacheQueue = useRef(Promise.resolve());
   useEffect(() => {
     let active = true;
-    chatCache().then(value => { if (active) setMessages(value.slice(-40)); }).catch(() => { if (active) setError("浏览器聊天缓存不可用，可从运行记录恢复提案。"); }).finally(() => { if (active) setReady(true); });
+    chatCache(userId).then(value => { if (active) setMessages(value.slice(-40)); }).catch(() => { if (active) setError("浏览器聊天缓存不可用，可从运行记录恢复提案。"); }).finally(() => { if (active) setReady(true); });
     return () => { active = false; abort.current?.abort(); };
-  }, []);
-  useEffect(() => { if (ready) cacheQueue.current = cacheQueue.current.then(() => chatCache(messages)).then(() => {}).catch(() => {}); }, [messages, ready]);
+  }, [userId]);
+  useEffect(() => { if (ready) cacheQueue.current = cacheQueue.current.then(() => chatCache(userId, messages)).then(() => {}).catch(() => {}); }, [messages, ready, userId]);
   useEffect(() => {
     if (!open) return;
     fetch("/api/ai").then(r => readJson<{ configured: boolean; model: string; capabilities: Capability[] }>(r)).then(v => { setConfigured(v.configured); setModel(v.model); setCapabilities(v.capabilities ?? []); }).catch(e => setError(e.message));

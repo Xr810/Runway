@@ -7,6 +7,7 @@ import { EntryError, deleteEntry, getEntry, listDeleted, listEntries, listSummar
 import { allWatches } from "@/lib/watch-storage";
 import { getDirectory } from "@/lib/directory-storage";
 import { syncEnrichment } from "@/lib/enrichment";
+import { getReminderPreferences } from "@/lib/reminder-preferences";
 export const dynamic = "force-dynamic";
 
 const maxFile = 15 * 1024 * 1024;
@@ -44,8 +45,8 @@ export async function GET(request: Request) {
     if (entryId) { const entry = await getEntry(entryId); return entry ? json({ entry, versions: await listVersions(entryId, true) }) : json({ error: "记录不存在或已删除" }, 404); }
     if (params.get("deleted")) return json({ entries: await listDeleted() });
     const full = params.get("export") === "1";
-    const [entries, files, versions, watches, directory] = await Promise.all([full ? listEntries() : listSummaries(), pool.query("SELECT * FROM files ORDER BY created DESC").then(r => r.rows), listVersions(undefined, full), allWatches(), getDirectory()]);
-    return json({ entries, files, versions, watches, directory });
+    const [entries, files, versions, watches, directory, reminderPreferences] = await Promise.all([full ? listEntries() : listSummaries(), pool.query("SELECT * FROM files ORDER BY created DESC").then(r => r.rows), listVersions(undefined, full), allWatches(), getDirectory(), getReminderPreferences()]);
+    return json({ entries, files, versions, watches, directory, reminderPreferences });
   } catch (e) { console.error(e); return json({ error: "读取失败，请稍后重试" }, 503); }
 }
 

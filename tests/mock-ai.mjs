@@ -33,7 +33,7 @@ function task(name, user) {
   if (name === "scan-judge") {
     const candidates = user.split("\n").filter(l => l.startsWith('{"key"')).map(l => JSON.parse(l));
     let picked = 0;
-    return { decisions: candidates.map(c => { const add = junior.test(c.title) && !senior.test(c.title) && picked++ < 3; return { key: c.key, add, reason: add ? "与期待方向相关，级别合适" : "级别或方向不匹配", region: /hong kong/i.test(c.location) ? "中国香港" : /remote/i.test(c.location) ? "跨地区" : "海外", workMode: /remote/i.test(c.location) ? "远程 Remote" : "待核实", employmentType: /intern/i.test(c.title) ? "实习 Internship" : "正式岗位", schedule: "全职 Full-time" }; }) };
+    return { decisions: candidates.map(c => { const add = junior.test(c.title) && !senior.test(c.title) && picked++ < 3; return { key: c.key, add, reason: add ? "与期待方向相关，级别合适" : "级别或方向不匹配", location: c.location || "", workMode: /remote/i.test(c.location) ? "远程 Remote" : "待核实", employmentType: /intern/i.test(c.title) ? "实习 Internship" : "正式岗位", schedule: "全职 Full-time" }; }) };
   }
   if (name === "scan-extract") {
     const links = user.split("\n").map(l => /^(\d+)\. (.*) → (https:\/\/\S+)$/.exec(l)).filter(Boolean);

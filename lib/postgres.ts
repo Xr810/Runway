@@ -13,12 +13,60 @@ const rawPool = globalDb.opportunityPool ??= new Pool({
 });
 rawPool.on("error", () => console.error("PostgreSQL idle connection failed"));
 
-// Only an explicitly scoped Agent mutation inherits a transaction. Ordinary requests
-// keep their existing pool behavior; async context does not cross request boundaries.
+// Only account/session/token lookup and worker enumeration use this pool.
+export const controlPool = rawPool;
+const userContext = new AsyncLocalStorage<string>();
+export function runAsUser<T>(userId: string, work: () => T): T {
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(userId)) throw Error("Invalid account ID");
+  return userContext.run(userId, work);
+}
+export async function currentUserId(): Promise<string> {
+  const scoped = userContext.getStore();
+  if (scoped) return scoped;
+  // Resolve identity in the request itself. enterWith() in an async auth helper
+  // does not propagate reliably to its caller and must not leak across requests.
+  const { getUser } = await import("./auth");
+  const user = await getUser();
+  if (user) return user.userId;
+  const { headers } = await import("next/headers");
+  const authorization = (await headers()).get("authorization") ?? "";
+  if (/^Bearer od_[A-Za-z0-9_-]{43}$/.test(authorization)) {
+    const { createHash } = await import("node:crypto");
+    const hash = createHash("sha256").update(authorization.slice(7)).digest("hex");
+    const row = (await controlPool.query("SELECT user_id FROM integration_tokens WHERE token_hash=$1 AND revoked_at IS NULL", [hash])).rows[0];
+    if (row) return row.user_id;
+  }
+  throw Error("Authenticated account required");
+}
+
+async function scopedClient(): Promise<PoolClient> {
+  const userId = await currentUserId(), client = await rawPool.connect();
+  try { await client.query("SELECT set_config('runway.user_id',$1,false)", [userId]); }
+  catch (error) { client.release(true); throw error; }
+  // Destroy rather than recycle if reset fails: no next request can inherit identity.
+  return new Proxy(client, {
+    get(target, property) {
+      if (property === "release") return (error?: Error | boolean) => {
+        if (error) { target.release(error); return; }
+        void target.query("RESET runway.user_id").then(() => target.release(), () => target.release(true));
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
 const transactionContext = new AsyncLocalStorage<PoolClient>();
 export const pool: Pool = new Proxy(rawPool, {
   get(target, property) {
-    if (property === "query" && transactionContext.getStore()) return transactionContext.getStore()!.query.bind(transactionContext.getStore());
+    if (property === "connect") return scopedClient;
+    if (property === "query") return async (...args: unknown[]) => {
+      const inherited = transactionContext.getStore();
+      if (inherited) return Reflect.apply(inherited.query, inherited, args);
+      const client = await scopedClient();
+      try { return await Reflect.apply(client.query, client, args); }
+      finally { client.release(); }
+    };
     const value = Reflect.get(target, property, target);
     return typeof value === "function" ? value.bind(target) : value;
   },

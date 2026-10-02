@@ -11,7 +11,7 @@ import type {IntegrationClient} from "./integrations";
 const profileKey="evaluation-profile-v1",directoryKey="company-channel-directory-v1";
 export const localActor={id:"00000000-0000-4000-8000-000000000001",name:"Runway"};
 const hash=(value:unknown)=>createHash("sha256").update(JSON.stringify(value)).digest("hex");
-type JobInput=Pick<Entry,"title"|"organization"|"location"|"region"|"employmentType"|"workMode"|"schedule"|"url"|"jd"|"summary"|"salary">;
+type JobInput=Pick<Entry,"title"|"organization"|"location"|"employmentType"|"workMode"|"schedule"|"url"|"jd"|"summary"|"salary">;
 export type TaskInput={target:EnrichmentTarget;name:string;website?:string;manualLogo?:string;job?:JobInput;profile?:EvaluationProfile;rubric:typeof rubric};
 type Task={id:string;kind:EnrichmentTarget["kind"];target_id:string;input_hash:string;payload:TaskInput;status:string;actor_id:string|null;lease_token:string|null;lease_until:string|null;attempts:number;result_hash:string|null};
 const key=(kind:string,id:string)=>kind+":"+id;
@@ -21,7 +21,7 @@ const transaction=<T>(run:(client:PoolClient)=>Promise<T>)=>tx(run,{lock:locks.e
 export async function evaluationProfile(db:Db=pool){const r=await db.query("SELECT value FROM meta WHERE key=$1",[profileKey]);return profileSchema.parse(r.rows[0]?JSON.parse(r.rows[0].value):{})}
 export async function saveEvaluationProfile(value:unknown){
  const parsed=profileSchema.safeParse(value);if(!parsed.success)fail(400,"invalid_profile","个人背景格式无效："+parsed.error.issues[0].message);
- const saved=await transaction(async c=>{const r=await c.query("SELECT value FROM meta WHERE key=$1 FOR UPDATE",[profileKey]);const old=profileSchema.parse(r.rows[0]?JSON.parse(r.rows[0].value):{});if(old.revision!==parsed.data.revision)fail(409,"profile_conflict","背景已更新，请刷新后再保存");const next={...parsed.data,revision:old.revision+1};await c.query("INSERT INTO meta(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",[profileKey,JSON.stringify(next)]);return next});
+ const saved=await transaction(async c=>{const r=await c.query("SELECT value FROM meta WHERE key=$1 FOR UPDATE",[profileKey]);const old=profileSchema.parse(r.rows[0]?JSON.parse(r.rows[0].value):{});if(old.revision!==parsed.data.revision)fail(409,"profile_conflict","背景已更新，请刷新后再保存");const next={...parsed.data,revision:old.revision+1};await c.query("INSERT INTO meta(key,value) VALUES($1,$2) ON CONFLICT(user_id,key) DO UPDATE SET value=EXCLUDED.value",[profileKey,JSON.stringify(next)]);return next});
  await syncEnrichment();return saved;
 }
 
@@ -33,7 +33,7 @@ async function inputs(c:Db):Promise<TaskInput[]>{
  const jobs=entries.filter(e=>e.kind==="job"),companies=new Map<string,string>();
  for(const name of [...jobs.map(e=>e.organization),...directory.companies.map(c=>c.name),...watches.rows.map(r=>r.data.company as string)])if(name.trim())companies.set(identity(name),name);
  const activeRubric=rubricFor(profile.evaluationPreset,profile.evaluationWeights);
- const jobInputs:TaskInput[]=jobs.map(e=>{const {title,organization,location,region,employmentType,workMode,schedule,url,jd,summary,salary}=e;return{target:{kind:"job",id:e.id},name:organization+" · "+title,job:{title,organization,location,region,employmentType,workMode,schedule,url,jd,summary,salary},profile,rubric:activeRubric}});
+ const jobInputs:TaskInput[]=jobs.map(e=>{const {title,organization,location,employmentType,workMode,schedule,url,jd,summary,salary}=e;return{target:{kind:"job",id:e.id},name:organization+" · "+title,job:{title,organization,location,employmentType,workMode,schedule,url,jd,summary,salary},profile,rubric:activeRubric}});
  return [...jobInputs,...[...companies].map(([id,name]):TaskInput=>{const saved=directory.companies.find(p=>identity(p.name)===id);return{target:{kind:"company",id},name,website:saved?.website||"",manualLogo:saved?.logoUrl||"",rubric}}),...allChannels(jobs,directory).filter(p=>p.name!=="公司官网").map(p=>({target:{kind:"channel" as const,id:identity(p.name)},name:p.name,website:p.url,manualLogo:p.logoUrl||"",rubric}))];
 }
 async function latestTasks(c:Db){return new Map((await c.query<Task>("SELECT DISTINCT ON (kind,target_id) * FROM enrichment_tasks ORDER BY kind,target_id,created DESC,id DESC")).rows.map(t=>[key(t.kind,t.target_id),t]))}
@@ -83,7 +83,7 @@ export async function queueEnrichment(scope:"job"|"brand"|"all",target?:Enrichme
  return {ok:true,queued,skipped};
 })}
 export async function lockEnrichment(target:EnrichmentTarget,locked:boolean){return transaction(async c=>{
- await c.query("INSERT INTO enrichment_state(kind,target_id,locked) VALUES($1,$2,$3) ON CONFLICT(kind,target_id) DO UPDATE SET locked=EXCLUDED.locked",[target.kind,target.id,locked]);
+ await c.query("INSERT INTO enrichment_state(kind,target_id,locked) VALUES($1,$2,$3) ON CONFLICT(user_id,kind,target_id) DO UPDATE SET locked=EXCLUDED.locked",[target.kind,target.id,locked]);
  if(locked){await c.query("UPDATE enrichment_tasks SET status='superseded',lease_token=NULL,updated=now() WHERE kind=$1 AND target_id=$2 AND status IN ('pending','running')",[target.kind,target.id]);return{ok:true}}
  // Unlocking re-queues the target with its current inputs.
  const payload=(await inputs(c)).find(p=>p.target.kind===target.kind&&p.target.id===target.id);
@@ -91,7 +91,7 @@ export async function lockEnrichment(target:EnrichmentTarget,locked:boolean){ret
  return{ok:true};
 })}
 async function authorizeActor(c:PoolClient,actor:IntegrationClient){
- if(actor.id===localActor.id){await c.query("INSERT INTO integration_clients(id,name,token_hash,token_hint) VALUES($1,$2,$3,'internal') ON CONFLICT(id) DO NOTHING",[localActor.id,localActor.name,"internal-no-bearer-token"]);return}
+ if(actor.id===localActor.id)return;
  const row=await c.query("SELECT id FROM integration_clients WHERE id=$1 AND revoked_at IS NULL FOR SHARE",[actor.id]);if(!row.rowCount)fail(401,"invalid_token","API Key 已撤销");
 }
 export async function claimEnrichment(actor:IntegrationClient,kinds:string[],limit:number,taskId?:string){return transaction(async c=>{
@@ -135,7 +135,7 @@ export async function completeEnrichment(actor:IntegrationClient,id:string,lease
    const {imageDataUrl,...metadata}=result;void imageDataUrl;stored={...metadata,assetUrl:"/api/brand-assets/"+resultId};after={source:result.sourceUrl,image:result.imageUrl};
   }
   await c.query("INSERT INTO enrichment_results(id,task_id,kind,target_id,input_hash,input,result,actor) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[resultId,id,task.kind,task.target_id,task.input_hash,JSON.stringify(payload),JSON.stringify(stored),actor.name]);
-  await c.query("INSERT INTO enrichment_state(kind,target_id,result_id) VALUES($1,$2,$3) ON CONFLICT(kind,target_id) DO UPDATE SET result_id=EXCLUDED.result_id",[task.kind,task.target_id,resultId]);
+  await c.query("INSERT INTO enrichment_state(kind,target_id,result_id) VALUES($1,$2,$3) ON CONFLICT(user_id,kind,target_id) DO UPDATE SET result_id=EXCLUDED.result_id",[task.kind,task.target_id,resultId]);
   await c.query("UPDATE enrichment_tasks SET status='completed',result_hash=$2,lease_until=NULL,error='',updated=now() WHERE id=$1",[id,resultHash]);
   // Icons fetched by Runway itself are routine; only assessments and Muse's work notify.
   if(task.kind==="job"||actor.id!==localActor.id)await notify({actor:actor.name,action:task.kind==="job"?"assessment":"brand",summary:result.summary,entryId:task.kind==="job"?task.target_id:null,title:payload.name,source:{kind:"manual",id,subject:task.kind==="job"?"岗位评估":"官方图标更新",url:result.kind==="brand"?result.sourceUrl:""},changes:[{field:task.kind==="job"?"evaluation":"logo",before,after}]},c);

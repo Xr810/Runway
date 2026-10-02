@@ -62,7 +62,7 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
   </div>;
 }
 
-export default function Shell({ children }: { children: ReactNode }) {
+export default function Shell({ children, userId }: { children: ReactNode; userId: string }) {
   const { setAssistantOpen, assistantOpen, notifications, setNotificationsOpen, guard } = useDesk();
   const [menu, setMenu] = useState(false);
   useEffect(() => {
@@ -89,7 +89,7 @@ export default function Shell({ children }: { children: ReactNode }) {
       <EntryEditor />
       <NotificationsSheet />
       <EvaluationDialog />
-      <Assistant />
+      <Assistant key={userId} userId={userId} />
       <Toaster richColors position="top-center" />
     </div>
   </TooltipProvider>;

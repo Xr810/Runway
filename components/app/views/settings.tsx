@@ -1,6 +1,6 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { DatabaseBackup, Plug, Sparkles, UserRound } from "lucide-react";
+import { Bell, DatabaseBackup, Plug, Sparkles, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDesk } from "../store";
 import { PageHeader } from "../ui";
@@ -8,10 +8,12 @@ import AiSettings from "../settings/ai";
 import ProfileSettings from "../settings/profile";
 import AutomationSettings from "../settings/automation";
 import DataSettings from "../settings/data";
+import { ReminderPreferencesEditor } from "../reminder-preferences";
 
 const sections = [
   { key: "ai", label: "AI 模型", hint: "接口、密钥与模型", icon: Sparkles },
   { key: "profile", label: "个人背景", hint: "简历与求职方向", icon: UserRound },
+  { key: "reminders", label: "招聘提醒", hint: "投递、测评与面试", icon: Bell },
   { key: "integrations", label: "自动化", hint: "每日扫描 · Muse 接入", icon: Plug },
   { key: "data", label: "数据与备份", hint: "导出与恢复", icon: DatabaseBackup },
 ] as const;
@@ -33,6 +35,7 @@ export default function SettingsView() {
       <div className="max-w-2xl min-w-0">
         {current === "ai" && <AiSettings />}
         {current === "profile" && <ProfileSettings />}
+        {current === "reminders" && <ReminderPreferencesEditor />}
         {current === "integrations" && <AutomationSettings />}
         {current === "data" && <DataSettings />}
       </div>

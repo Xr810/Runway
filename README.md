@@ -5,8 +5,9 @@ works on the data: it reads job links and screenshots, sets reminders, adjusts t
 scans watched career pages every morning and fills in missing company details.
 
 Next.js 16 (App Router) · React 19 · PostgreSQL 17 · Docker · LangGraph.
-The interface is primarily Chinese. This is a single-user application, not a multi-tenant
-service. Deployment guidance is in [deploy/README.md](deploy/README.md).
+The interface is primarily Chinese. Each account has an isolated personal workspace; Runway
+does not provide teams, shared workspaces, or shared records. Deployment guidance is in
+[deploy/README.md](deploy/README.md).
 
 This public source snapshot excludes the original import history, user records, CVs,
 attachments, environment files, and private infrastructure scripts.
@@ -35,13 +36,22 @@ Requirements: Node.js 22.13 or newer, npm, and PostgreSQL 17.
    node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
    ```
 
-4. Generate a scrypt login hash using `node scripts/password-hash.mjs` and paste its output
-   into `LOGIN_PASSWORD_HASH`. The script prompts without echoing the password.
-5. Run `node --env-file=.env.local scripts/migrate.mjs`, then `npm run dev`.
-6. Open `http://localhost:3000` and sign in with your chosen password.
+4. Run `node --env-file=.env.local scripts/migrate.mjs`, then `npm run dev`.
+5. Open `http://localhost:3000` and register with an email address and password (minimum 10
+   characters).
 
-AI features are optional. Configure a compatible provider in Settings or set `AI_BASE_URL`,
-`AI_API_KEY`, and `AI_MODEL`. Keep `SCHEDULER=off` during development. For isolated tests,
+Google sign-in is optional. Create a Google OAuth web client, configure its authorized redirect
+URI as `${APP_ORIGIN}/api/auth/google/callback`, and set `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET`. Runway does not automatically link a Google identity to a password
+account with the same email; they remain separate accounts. Email verification and password
+recovery are not implemented.
+
+AI is optional and subject to each account's `ai_enabled` permission. With the default
+`AI_MODE=personal`, users configure their own compatible endpoint, model, API key, and optional
+Tavily key in Settings; deployment credentials are never used as a fallback. `AI_MODE=managed`
+uses only the deployment's `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, and `TAVILY_API_KEY`, and
+users cannot view, edit, or test those credentials. The application uses the fixed
+`Asia/Hong_Kong` product timezone. Keep `SCHEDULER=off` during development. For isolated tests,
 `node tests/mock-ai.mjs` starts a deterministic local model fixture.
 
 ## Verification

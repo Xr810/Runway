@@ -23,7 +23,7 @@ function fixture() {
   const fetched: string[] = [];
   const judged: string[][] = [];
   const scanner = loadModule<{ runScan(trigger: "schedule" | "manual"): Promise<number> }>(new URL("../../lib/scanner.ts", import.meta.url), {
-    "node:crypto": crypto, zod: { z }, "./postgres": { pool }, "./model": model,
+    "node:crypto": crypto, zod: { z }, "./postgres": { pool, currentUserId: async () => "fixture", runAsUser: (_id: string, work: () => unknown) => work() }, "./model": model,
     "./integration-contract": { canonicalUrl: (value: string) => value },
     "./entries": { listEntries: async () => entries, saveEntry: async (entry: model.Entry) => { entries.push(entry); return { entry }; } },
     "./watch-storage": { allWatches: async () => watches },
@@ -32,7 +32,7 @@ function fixture() {
     "./ai-client": { aiJson: async (_kind: string, _system: string, prompt: string) => {
       const candidates = prompt.split("候选岗位：\n")[1].split("\n").map(line => JSON.parse(line));
       judged.push(candidates.map(c => c.key));
-      return { decisions: candidates.slice(0, behavior.incomplete ? -1 : undefined).map((c, i) => ({ key: c.key, add: !(behavior.rejectLast && i === candidates.length - 1), reason: "fixture", region: "待核实", workMode: "待核实", employmentType: "待核实", schedule: "待核实" })) };
+      return { decisions: candidates.slice(0, behavior.incomplete ? -1 : undefined).map((c, i) => ({ key: c.key, add: !(behavior.rejectLast && i === candidates.length - 1), reason: "fixture", location: c.location, workMode: "待核实", employmentType: "待核实", schedule: "待核实" })) };
     } },
     "./web": { fetchJson: async (address: string) => {
       const id = /boards\/([^/]+)\/jobs/.exec(address)![1]; fetched.push(id);
