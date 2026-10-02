@@ -88,6 +88,21 @@ test("disabled accounts cannot bypass AI configuration or execution policy", asy
     assert(Array.isArray(brief.body.brief.items));
   } finally { await db.query("UPDATE accounts SET ai_enabled=true WHERE id=$1", [accounts.a.id]); }
 });
+test("AI settings never return submitted personal credentials", async () => {
+  active = "a";
+  const apiKey = `private-${randomUUID()}`, tavilyApiKey = `search-${randomUUID()}`;
+  const current = await call("/api/settings/ai");
+  const saved = await call("/api/settings/ai", { method: "POST", body: { action: "save", base: aiBase, apiKey, tavilyApiKey, model: "mock-model-a", revision: current.body.revision } });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  for (const body of [saved.body, (await call("/api/settings/ai")).body]) {
+    assert(!JSON.stringify(body).includes(apiKey));
+    assert(!JSON.stringify(body).includes(tavilyApiKey));
+    assert(!("key" in body)); assert(!("apiKey" in body)); assert(!("tavilyKey" in body)); assert(!("tavilyApiKey" in body));
+  }
+  active = "b";
+  assert(!JSON.stringify((await call("/api/settings/ai")).body).includes(apiKey));
+  assert(!JSON.stringify((await call("/api/settings/ai")).body).includes(tavilyApiKey));
+});
 test("malformed bodies are client errors, not 503", async () => {
   assert.equal((await call("/api/desk", { method: "POST", body: "{not json" })).status, 400);
   assert.equal((await call("/api/desk", { method: "POST", body: { action: "restoreVersions", versions: [{ id: "a", entry_id: "b", data: "{bad", created: "2026-01-01" }] } })).status, 400);

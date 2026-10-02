@@ -36,6 +36,8 @@ test("managed policy uses deployment credentials but public config hides connect
   try {
     const loaded = moduleFor(true), config = await loaded.getAiConfig(), visible = loaded.publicAiConfig(config as unknown as Record<string, unknown>);
     assert.equal(config.key, "secret"); assert.equal(visible.base, ""); assert.equal(visible.hasKey, false); assert.equal(visible.editable, false);
+    assert.deepEqual(Object.keys(visible).sort(), ["base", "configured", "editable", "enabled", "hasKey", "hasTavilyKey", "mode", "model", "revision", "source"]);
+    assert(!JSON.stringify(visible).includes("secret"));
   } finally { restore("AI_MODE", old); delete process.env.AI_BASE_URL; delete process.env.AI_API_KEY; }
 });
 
