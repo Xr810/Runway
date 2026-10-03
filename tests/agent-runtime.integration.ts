@@ -6,11 +6,18 @@ import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 const url = new URL(process.env.DATABASE_URL ?? "");
 assert.equal(url.hostname, "127.0.0.1"); assert.equal(url.pathname, "/runway_agent_test");
-const { pool, atomicAgentWrite } = await import("../lib/postgres");
+const { pool, controlPool, runAsUser, atomicAgentWrite } = await import("../lib/postgres");
 const { startAgentRun, advanceAgentRun, getAgentRun } = await import("../lib/agent-runtime");
+// Tenant-scoped reads and writes need a real account context; a bare "owner" string
+// is no longer an identity (#30).
+const owner = process.argv[2] === "resume" ? process.argv[5] : randomUUID();
+if (process.argv[2] !== "resume") await controlPool.query("INSERT INTO accounts(id,display_name) VALUES($1,'[agent-test] account')", [owner]);
 if (process.argv[2] === "resume") {
-  const run = await advanceAgentRun(process.argv[3], "owner", { proposalId: process.argv[4], approved: true, allowDuplicate: false });
-  assert.equal(run.outcomes[process.argv[4]].status, "done"); await pool.end(); process.exit(0);
+  await runAsUser(owner, async () => {
+    const run = await advanceAgentRun(process.argv[3], owner, { proposalId: process.argv[4], approved: true, allowDuplicate: false });
+    assert.equal(run.outcomes[process.argv[4]].status, "done");
+  });
+  await pool.end(); process.exit(0);
 }
 const { saveEntry, getEntry } = await import("../lib/entries");
 const { blankEntry, today } = await import("../lib/model");
@@ -28,23 +35,24 @@ await new Promise<void>(resolve=>mock.listen(0,"127.0.0.1",resolve));
 const address=mock.address() as {port:number}; process.env.AI_BASE_URL=`http://127.0.0.1:${address.port}/v1`; process.env.AI_API_KEY="fixture-only";process.env.AI_MODEL="fixture";
 const input = {messages:[{role:"user" as const,text:"fixture request"}],images:[]};
 const snapshot=async()=>loadAgentSnapshot({entries:await listEntries(),gigs:await listGigs(),watches:await allWatches(),reminders:(await listReminders()).reminders,profile:await evaluationProfile(),ai:{base:process.env.AI_BASE_URL!,model:"fixture",revision:0}});
-const seedRun=async()=>{const id=randomUUID();await pool.query("INSERT INTO agent_runs(id,owner_id,input) VALUES($1,'owner',$2)",[id,JSON.stringify(input)]);return id;};
+const seedRun=async()=>{const id=randomUUID();await pool.query("INSERT INTO agent_runs(id,owner_id,input) VALUES($1,$2,$3)",[id,owner,JSON.stringify(input)]);return id;};
 try {
+  await runAsUser(owner, async () => {
   response={reply:"confirm reminder",actions:[{module:"reminder",operation:"add",fields:{title:"[agent-test] Reminder",schedule:{type:"daily",time:"09:00",until:""}}}]};
-  const runId=randomUUID(), run=await startAgentRun(runId,"owner",input);
+  const runId=randomUUID(), run=await startAgentRun(runId,owner,input);
   assert.equal(run.runtime,"langgraph");assert.equal(run.actions!.length,1);
   const draft=run.actions![0], reminderId=(draft.body as {reminder:{id:string}}).reminder.id;
   assert.equal((await pool.query("SELECT 1 FROM reminders WHERE id=$1",[reminderId])).rowCount,0);
   await assert.rejects(getAgentRun(runId,"different-user"),/不存在/);
-  await assert.rejects(advanceAgentRun(runId,"owner",{proposalId:randomUUID(),approved:true,allowDuplicate:false}),/不属于/);
-  await promisify(execFile)(process.execPath,["--import","tsx","tests/agent-runtime.integration.ts","resume",runId,draft.id],{env:process.env,timeout:30000});
-  const resumed=await getAgentRun(runId,"owner");assert.equal(resumed.outcomes[draft.id].status,"done");
-  await advanceAgentRun(runId,"owner",{proposalId:draft.id,approved:true,allowDuplicate:false});
+  await assert.rejects(advanceAgentRun(runId,owner,{proposalId:randomUUID(),approved:true,allowDuplicate:false}),/不属于/);
+  await promisify(execFile)(process.execPath,["--import","tsx","tests/agent-runtime.integration.ts","resume",runId,draft.id,owner],{env:process.env,timeout:30000});
+  const resumed=await getAgentRun(runId,owner);assert.equal(resumed.outcomes[draft.id].status,"done");
+  await advanceAgentRun(runId,owner,{proposalId:draft.id,approved:true,allowDuplicate:false});
   assert.equal((await pool.query("SELECT revision FROM reminders WHERE id=$1",[reminderId])).rows[0].revision,1);
   assert.equal((await pool.query("SELECT 1 FROM agent_operations WHERE run_id=$1",[runId])).rowCount,1);
   console.log("PASS real model adapter (mock), durable confirmation, fresh-process resume, repeat decision, owner checks");
-  const rejected=await startAgentRun(randomUUID(),"owner",input);const rejectDraft=rejected.actions![0];
-  await advanceAgentRun(rejected.runId,"owner",{proposalId:rejectDraft.id,approved:false,allowDuplicate:false});
+  const rejected=await startAgentRun(randomUUID(),owner,input);const rejectDraft=rejected.actions![0];
+  await advanceAgentRun(rejected.runId,owner,{proposalId:rejectDraft.id,approved:false,allowDuplicate:false});
   assert.equal((await pool.query("SELECT 1 FROM reminders WHERE id=$1",[(rejectDraft.body as {reminder:{id:string}}).reminder.id])).rowCount,0);
   console.log("PASS rejection has no business side effects");
   const original=(await saveEntry({...blankEntry("job"),title:"[agent-test] Original"})).entry;
@@ -76,4 +84,14 @@ try {
   await executeAgentDraft(jobRun,job,{proposalId:job.id,approved:true,allowDuplicate:false});
   assert.equal((await pool.query("SELECT 1 FROM agent_jobs WHERE id=$1 AND status='pending'",[job.id])).rowCount,1);
   console.log("PASS directory, gig, income, watch, profile, settings and exactly-once job enqueue");
-} finally { mock.close();await pool.end(); }
+  });
+} finally {
+  mock.close();
+  await runAsUser(owner, async () => {
+    for (const table of ["agent_operations","agent_jobs","reminder_done","crawl_seen","crawl_runs","integration_events","versions","files","enrichment_results","enrichment_tasks","enrichment_state","notifications","ai_cache","documents","brand_assets","part_time_records","reminders","company_watches","agent_runs","entries","meta"]) {
+      await pool.query(`DELETE FROM ${table} WHERE user_id=$1`, [owner]).catch(() => {});
+    }
+  });
+  await controlPool.query("DELETE FROM accounts WHERE id=$1", [owner]).catch(() => {});
+  await pool.end();
+}

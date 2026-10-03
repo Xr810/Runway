@@ -1,7 +1,7 @@
 // Isolated persistence/worker check. Uses a newly created PostgreSQL schema and removes only that schema.
 import assert from "node:assert/strict";
 import pg from "pg";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 const admin = new pg.Client({ connectionString: process.env.DATABASE_URL });
 await admin.connect();
 const schema = "agent_test_" + randomBytes(8).toString("hex");
@@ -12,8 +12,12 @@ try {
   const url = new URL(process.env.DATABASE_URL!); url.searchParams.set("options", "-c search_path=" + schema);
   process.env.DATABASE_URL = url.toString();
   await import("./" + "migrate.mjs");
-  const { pool } = await import("../lib/postgres"); close = () => pool.end();
-  for (const s of settings) await pool.query("INSERT INTO meta(key,value) VALUES($1,$2)", [s.key, s.value]);
+  const { controlPool, pool, runAsUser } = await import("../lib/postgres"); close = () => pool.end();
+  // Tenant-scoped queries require a real account; create one for this disposable schema (#30).
+  const account = randomUUID();
+  await controlPool.query("INSERT INTO accounts(id,display_name) VALUES($1,'[agent-storage] account')", [account]);
+  await runAsUser(account, async () => {
+  for (const s of settings) await pool.query("INSERT INTO meta(user_id,key,value) VALUES($1,$2,$3)", [account, s.key, s.value]);
   const { blankEntry } = await import("../lib/model");
   const { saveEntry, getEntry, deleteEntry, undeleteEntry } = await import("../lib/entries");
   const { prepareAgentActions } = await import("../lib/agent-contract");
@@ -49,6 +53,7 @@ try {
   }
   assert(complete, "Worker did not complete in time");
   console.log(JSON.stringify({ passed: true, checks: ["appointment persistence", "stale revision rejection", "delete and restore", "directory", "gig archive", "builtin worker writes result and history"] }));
+  });
 } finally {
   if (close) await close();
   await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
