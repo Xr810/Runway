@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { entryObject, entrySchema, blankEntry, defaultJobDeadline, defaultNextAction, type Entry } from "./model";
+import { entryObject, entrySchema, blankEntry, defaultJobDeadline, defaultNextAction, today, type Entry } from "./model";
 import { appointmentSchema } from "./appointments";
 import { progressSchema } from "./model";
 import { companyProfileSchema, channelSchema, directorySchema, identity, type Directory } from "./journey";
@@ -119,7 +119,7 @@ export function prepareAgentActions(raw: unknown[], s: AgentSnapshot): AgentDraf
       }
       const old = requireItem(s.reminders.find(r => r.id === a.targetId));
       if (a.operation === "delete") return draft("删除提醒：" + old.title, "/api/reminders", { action: "delete", id: old.id, revision: old.revision }, [{ field: "title", before: old.title, after: null }]);
-      if (a.operation === "done") { const p = z.object({ day: z.string().date(), done: z.boolean() }).strict().parse(a.fields); return draft("提醒完成状态：" + old.title, "/api/reminders", { action: "done", id: old.id, revision: old.revision, ...p }, changes({}, p, Object.keys(p))); }
+      if (a.operation === "done") { const p = z.object({ day: z.string().date().default(today()), done: z.boolean() }).strict().parse(a.fields); return draft("提醒完成状态：" + old.title, "/api/reminders", { action: "done", id: old.id, revision: old.revision, ...p }, changes({}, p, Object.keys(p))); }
       const patch = reminderSchema.omit({ id: true, revision: true }).partial().strict().parse(a.fields);
       const next = reminderSchema.parse({ ...old, ...patch });
       return draft("修改提醒：" + old.title, "/api/reminders", { action: "save", reminder: next }, changes(old, next, Object.keys(patch)));
@@ -152,5 +152,5 @@ export function prepareAgentActions(raw: unknown[], s: AgentSnapshot): AgentDraf
   });
 }
 
-export const agentReadSchema = z.object({ module: z.enum(["entries", "deleted", "directory", "gigs", "watches", "reminders", "profile", "settings", "notifications", "evaluations", "versions", "files", "brief", "scan", "companyCompletion", "capabilities"]), kind: z.enum(["job", "company", "channel"]).optional(), before: z.string().regex(/^\d+$/).optional(), id: z.string().max(2000).optional(), query: z.string().max(200).optional(), offset: z.number().int().min(0).max(1000000).default(0) }).strict();
+export const agentReadSchema = z.object({ module: z.enum(["entries", "deleted", "directory", "gigs", "watches", "reminders", "profile", "settings", "notifications", "evaluations", "versions", "files", "brief", "scan", "companyCompletion", "capabilities"]), kind: z.enum(["job", "company", "channel"]).optional(), before: z.string().regex(/^\d+$/).optional(), day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), id: z.string().max(2000).optional(), query: z.string().max(200).optional(), offset: z.number().int().min(0).max(1000000).default(0) }).strict();
 export type AgentRead = z.infer<typeof agentReadSchema>;

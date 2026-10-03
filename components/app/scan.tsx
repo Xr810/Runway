@@ -57,6 +57,7 @@ export function AutomationMenu({ scan }: { scan: ReturnType<typeof useScan> }) {
           const state = await readJson<{ run?: { id: string; status: string; error?: string } }>(await fetch("/api/companies/complete", { cache: "no-store" }));
           if (state.run?.id !== started.runId) throw Error("任务状态已变化，请查看公司资料后重试。");
           if (state.run.status === "failed") throw Error(state.run.error || "公司资料补全失败");
+          if (state.run.status === "no_updates") throw Error("没有找到可更新的公司资料，详见通知。");
           if (state.run.status === "completed") { complete = true; break; }
         }
         if (!complete) throw Error("任务仍在后台处理中，尚未确认完成。");

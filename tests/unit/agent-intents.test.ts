@@ -40,3 +40,15 @@ test("named company logo refresh is targeted and replaces stale cached marks",()
   const repeated=routeCompanyLogoCompletion(reply,richer,"Oliver和Goldman公司补全没有生效");
   assert.deepEqual(repeated.actions?.[0].body,{names:["Goldman Sachs","Oliver Wyman"],refreshLogo:false});
 });
+
+test("read-only questions never become company completion writes",()=>{
+  const prompt="Acme Research 的岗位还没有面试吗？只查看状态，不要修改";
+  assert.equal(routeCompanyLogoCompletion(reply,snapshot,prompt),reply);
+  assert.equal(routeCompanyLogoCompletion(reply,snapshot,"请只查看公司资料，不要修改"),reply);
+});
+
+test("similar company names do not expand the completion scope",()=>{
+  const richer={...snapshot,directory:{...snapshot.directory,companies:[...snapshot.directory.companies,{name:"Acme Research",website:"",logoUrl:""},{name:"Beta Research",website:"",logoUrl:""}]}};
+  const result=routeCompanyLogoCompletion(reply,richer,"Acme Research 的公司资料还没补全，帮我补一下");
+  assert.deepEqual(result.actions?.[0].body,{names:["Acme Research"],refreshLogo:false});
+});

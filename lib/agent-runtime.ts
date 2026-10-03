@@ -70,7 +70,7 @@ export async function getAgentRun(id: string, owner: string): Promise<AgentRunRe
   const receipts = await pool.query("SELECT id,result FROM agent_operations WHERE run_id=$1", [id]);
   for (const receipt of receipts.rows) outcomes[receipt.id] = receipt.result;
   const jobs = await pool.query("SELECT id,status,result,error FROM agent_jobs WHERE run_id=$1", [id]);
-  for (const j of jobs.rows) if (outcomes[j.id]) outcomes[j.id] = { status: j.status === "completed" ? "done" : ["failed", "interrupted"].includes(j.status) ? "error" : "queued", result: j.result, message: j.status === "completed" ? "后台任务已完成。" : j.error || (j.status === "running" ? "后台任务执行中。" : "后台任务等待执行。") };
+  for (const j of jobs.rows) if (outcomes[j.id]) { const result = j.result as { updated?: number } | null; const noUpdates = j.status === "completed" && result !== null && typeof result.updated === "number" && result.updated === 0; outcomes[j.id] = { status: j.status === "completed" ? "done" : ["failed", "interrupted"].includes(j.status) ? "error" : "queued", result: j.result, message: j.status === "completed" ? (noUpdates ? "后台任务已完成，但没有找到可更新的资料。" : "后台任务已完成。") : j.error || (j.status === "running" ? "后台任务执行中。" : "后台任务等待执行。") }; }
   const runStatus = state.values.reply ? state.next.includes("execute") ? "recoverable" : state.next.length ? "awaiting_confirmation" : "completed" : row.status;
   return { ...emptyReply, ...state.values.reply, runId: id, runtime: "langgraph", runStatus, outcomes, runError: row.error || undefined };
 }

@@ -71,3 +71,12 @@ test("concatenated provider replies only consume a first read, never a premature
   assert.throws(() => parseAgentResponse('{"reply":"first"}{"reply":"second"}'));
   assert.throws(() => parseAgentResponse('{"reads":[]} {"reply":"bad"}'));
 });
+
+test("reminder completion proposals default to today and keep an explicit day", () => {
+  const reminder = { id: "rem-1", title: "Do it", note: "", url: "", schedule: { type: "daily" as const, time: "08:00", until: "" }, active: true, entryId: null, source: "user" as const, revision: 0 };
+  const local = { ...snapshot, reminders: [reminder] };
+  const draft = prepareAgentActions([{ module: "reminder", operation: "done", targetId: "rem-1", fields: { done: true } }], local)[0];
+  assert.equal((draft.body as { day: string }).day, today());
+  const explicit = prepareAgentActions([{ module: "reminder", operation: "done", targetId: "rem-1", fields: { day: "2026-01-02", done: false } }], local)[0];
+  assert.equal((explicit.body as { day: string }).day, "2026-01-02");
+});
