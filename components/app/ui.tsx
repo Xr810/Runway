@@ -66,8 +66,8 @@ export function DueLabel({ date, kind }: { date: string; kind?: string }) {
   </span>;
 }
 
-export function ScoreValue({ entry, className }: { entry: Entry; className?: string }) {
-  const value = score(entry);
+export function ScoreValue({ entry, weights, className }: { entry: Entry; weights?: Parameters<typeof score>[1]; className?: string }) {
+  const value = score(entry, weights);
   if (value === null) return <span className={cn("text-muted-foreground", className)}>—</span>;
   const tone = value >= 7.5 ? "text-emerald-700 dark:text-emerald-400" : value >= 5 ? "text-foreground" : "text-muted-foreground";
   return <span className={cn("tabular font-semibold", tone, className)}>{value.toFixed(1)}</span>;
