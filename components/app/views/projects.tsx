@@ -92,7 +92,7 @@ function TrackCard({ entry, year, onLog }: { entry: Entry; year: number; onLog: 
       <StatusBadge status={entry.status} />
     </div>
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 text-xs text-muted-foreground">
-      <span className="inline-flex items-center gap-1.5"><CalendarDays className="size-3.5" />{entry.deadline ? <>{project ? "目标" : "截止"} {formatDay(entry.deadline, false)} <b className={cn("font-medium", dayDiff(entry.deadline) < 0 ? "text-muted-foreground" : dayDiff(entry.deadline) <= 7 ? "text-red-600 dark:text-red-400" : "text-foreground")}>{dayDiff(entry.deadline) < 0 ? "已过" : dayDiff(entry.deadline) === 0 ? "就是今天" : `还有 ${dayDiff(entry.deadline)} 天`}</b></> : project ? "没有设定目标日期" : "未设置截止"}</span>
+      <span className="inline-flex items-center gap-1.5"><CalendarDays className="size-3.5" />{entry.deadline ? <>{project ? "目标" : "截止"} {formatDay(entry.deadline, false)} <b className={cn("font-medium", dayDiff(entry.deadline) < 0 ? "text-muted-foreground" : dayDiff(entry.deadline) <= 7 ? "text-red-600 dark:text-red-400" : "text-foreground")}>{dayDiff(entry.deadline) < 0 ? "已过" : dayDiff(entry.deadline) === 0 ? "今天" : `还有 ${dayDiff(entry.deadline)} 天`}</b></> : project ? "没有设定目标日期" : "未设置截止"}</span>
       <span>{last ? <>上次推进 <b className="font-medium text-foreground">{relativeDay(last)}</b></> : "还没有进度"}</span>
       <span><b className="tabular font-medium text-foreground">{counts.size}</b> 天活跃</span>
       {milestones.length > 0 && <span className="inline-flex items-center gap-1"><Flag className="size-3 fill-amber-500 text-amber-500" /><b className="tabular font-medium text-foreground">{milestones.length}</b> 个里程碑</span>}

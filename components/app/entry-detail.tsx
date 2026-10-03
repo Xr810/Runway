@@ -90,12 +90,12 @@ export default function EntryDetail() {
                   <p className="mt-0.5 text-sm font-medium">{entry.nextAction || "跟进"}</p>
                   {entry.followUp && <p className="mt-1 text-xs text-muted-foreground">计划 {formatDay(entry.followUp)} · {relativeDay(entry.followUp)}</p>}
                 </div>}
-                <div className="grid grid-cols-3 gap-2"><DateCell label={copy.deadline} value={entry.deadline} /><DateCell label={copy.followUp} value={entry.followUp} /><DateCell label={copy.applied} value={entry.applied} /></div>
+                <div className="grid grid-cols-3 gap-2"><DateCell label={entry.kind === "project" ? "目标日期" : "截止日期"} value={entry.deadline} /><DateCell label={copy.followUp + "日期"} value={entry.followUp} /><DateCell label={copy.applied + "日期"} value={entry.applied} /></div>
                 {entry.appointments.length > 0 && <Section title="面试与笔试">
                   <ul className="flex flex-col gap-2">{entry.appointments.toSorted((a, b) => a.startsAt.localeCompare(b.startsAt)).map(item => { const due = recruitingReminders([entry], data.reminderPreferences).find(reminder => reminder.appointmentId === item.id)?.date, progress = stageProgress(item, today(), due); return <li key={item.id} className="flex gap-3 rounded-lg border bg-card px-3 py-2.5">
                     <CalendarClock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1"><p className="text-sm font-medium">{item.title}</p>
-                      <p className="text-xs text-muted-foreground">{item.type === "assessment" ? `通知 ${formatDay(item.receivedDate)} · 截止 ${formatDay(item.deadlineDate)}${item.completedAt ? ` · 完成 ${formatDay(appointmentDate(item.completedAt))}` : ""}` : `${formatDay(appointmentDate(item.startsAt))} ${appointmentTime(item.startsAt)}${item.endsAt ? "–" + appointmentTime(item.endsAt) : ""} · 香港时间`}{item.location ? " · " + item.location : ""}</p>
+                      <p className="text-xs text-muted-foreground">{item.type === "assessment" ? `通知 ${formatDay(item.receivedDate)} · 截止 ${formatDay(item.deadlineDate)}${item.completedAt ? ` · 完成 ${formatDay(appointmentDate(item.completedAt))}` : ""}` : `${formatDay(appointmentDate(item.startsAt))} ${appointmentTime(item.startsAt)}${item.endsAt ? "–" + appointmentTime(item.endsAt) : ""}`}{item.location ? " · " + item.location : ""}</p>
                       <div className="mt-1 h-1.5 overflow-hidden rounded bg-muted"><div className="h-full bg-primary" style={{width: `${progress.percent}%`}} /></div><p className="mt-1 text-xs text-muted-foreground">{progress.label}</p>{item.url && <a className="text-xs text-primary hover:underline" href={item.url} target="_blank" rel="noreferrer">打开日程链接</a>}</div>
                     <Pill tone={item.status === "completed" ? "green" : item.status === "cancelled" ? "gray" : "blue"}>{appointmentStatus[item.status]}</Pill>
                   </li>})}</ul>
@@ -122,13 +122,13 @@ export default function EntryDetail() {
                 {isJob && <Section title="公司背景">
                   <div className="rounded-lg border bg-card px-3 py-2.5">
                     <p className="text-sm font-medium">{entry.companyType}</p>
-                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{entry.companyBasis || "尚未核实。这里按集团背景归类，不是法律股权认定。"}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{entry.companyBasis || "尚未核实。"}</p>
                     {entry.companySource && <a className="mt-1.5 inline-flex items-center gap-1 text-xs text-primary hover:underline" href={entry.companySource} target="_blank" rel="noreferrer">查看来源<ExternalLink className="size-3" /></a>}
                   </div>
                 </Section>}
                 {entry.notes && <Section title="备注"><p className="text-sm leading-relaxed whitespace-pre-wrap">{entry.notes}</p></Section>}
                 {Object.keys(entry.extra).length > 0 && <details className="group rounded-lg border bg-card">
-                  <summary className="cursor-pointer px-3 py-2.5 text-xs text-muted-foreground">导入时的原始字段（Airtable）</summary>
+                  <summary className="cursor-pointer px-3 py-2.5 text-xs text-muted-foreground">导入时的原始字段</summary>
                   <dl className="flex flex-col gap-3 border-t px-3 py-3">{Object.entries(entry.extra).map(([k, v]) => <div key={k}><dt className="text-xs text-muted-foreground">{k}</dt><dd className="mt-0.5 text-xs whitespace-pre-wrap break-words">{typeof v === "string" ? v : JSON.stringify(v, null, 2)}</dd></div>)}</dl>
                 </details>}
               </TabsContent>

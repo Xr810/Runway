@@ -153,17 +153,17 @@ export function EvaluationQueue({ entries }: { entries: Entry[] }) {
       <Button size="sm" disabled={busy} onClick={() => void queue(false)}>{busy ? <LoaderCircle className="animate-spin" /> : <ScanSearch />}评估未处理的岗位</Button>
       <Button size="sm" variant="outline" disabled={busy} onClick={() => void queue(true)}><RefreshCw />全部重新评估</Button>
       <Button size="sm" variant="ghost" asChild><Link href="/settings?section=profile"><UserRound />个人背景</Link></Button>
-      <span className="ml-auto text-xs text-muted-foreground">综合分按已知项目加权归一化；未知项不猜分。</span>
+      
     </div>
     {profile && <section className="rounded-xl border bg-card p-3" aria-label="评估权重">
       <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-medium">评估侧重</span>
         {Object.entries(weightPresets).map(([key,value])=><Button key={key} size="sm" variant={profile.evaluationPreset===key?"default":"outline"} disabled={busy} onClick={()=>void saveWeights(key as EvaluationProfile["evaluationPreset"],value.weights)}>{value.label}</Button>)}
         <Button size="sm" variant={profile.evaluationPreset==="custom"?"default":"outline"} disabled={busy} onClick={()=>{setCustomWeights(weights);void saveWeights("custom",weights)}}>自定义</Button>
       </div>
-      <p className="mt-2 text-[11px] text-muted-foreground">默认均衡：匹配 25% · 成长 25% · 转正 20% · 学术 15% · 公司前景 15%。证据不足时显示待核实，综合分只按有分数的维度重新归一化。</p>
+      <p className="mt-2 text-[11px] text-muted-foreground">默认均衡：匹配 25% · 成长 25% · 转正 20% · 学术 15% · 前景 15%。证据不足的维度显示「待核实」，不计入综合分。</p>
       {profile.evaluationPreset==="custom" && <div className="mt-3 grid gap-2"> <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">{factors.map(([key,label])=><label key={key} className="grid gap-1 text-xs text-muted-foreground">{label} · {(customWeights||weights)[key as keyof EvaluationWeights]}%<input aria-label={label+"权重"} type="number" min="0" max="100" step="5" value={(customWeights||weights)[key as keyof EvaluationWeights]} onChange={e=>{const v=Math.max(0,Math.min(100,Number(e.target.value)||0));setCustomWeights({...customWeights||weights,[key]:v});}} className="h-8 rounded-md border bg-background px-2 text-foreground" /></label>)}</div><div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">当前合计：{Object.values(customWeights||weights).reduce((a,b)=>a+b,0)}%</span><Button size="sm" disabled={busy||!customWeights||Object.values(customWeights).reduce((a,b)=>a+b,0)!==100} onClick={()=>customWeights&&void saveWeights("custom",customWeights)}>保存自定义权重</Button></div></div>}
     </section>}
-    {missingProfile && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-400/10 dark:text-amber-300">还没有填写个人背景或职业目标。缺失时，匹配度和职业发展评分会保持空白。<Link href="/settings?section=profile" className="ml-1 font-medium underline">去填写</Link></p>}
+    {missingProfile && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-400/10 dark:text-amber-300">还没有填写个人背景或职业目标。缺失时，岗位匹配度和职业路径与成长会保持空白。<Link href="/settings?section=profile" className="ml-1 font-medium underline">去填写</Link></p>}
     {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
     <div className="overflow-hidden rounded-xl border bg-card">
       {entries.length ? entries.map(e => {

@@ -113,12 +113,12 @@ export default function PartTimeView() {
         </details>}
       </article>;
     })}</div> : <EmptyState icon={<Wallet />} title={items.some(i => i.archived === archived) || archived ? "没有符合条件的兼职" : "从一份小任务，或一项持续收入开始"} description={archived ? "归档后可在这里恢复，历史收入会一直保留。" : "为每项兼职建一条记录，完成任务后记下报酬；长期合作和平台收入可以持续记账。"}
-      action={!archived && <div className="flex flex-wrap justify-center gap-2"><Button size="sm" onClick={() => setEditing(newGig("task"))}>调查 / 临时任务</Button><Button size="sm" variant="outline" onClick={() => setEditing({ ...newGig("ongoing"), title: "WorldQuant BRAIN 顾问", organization: "WorldQuant" })}>WorldQuant BRAIN</Button><Button size="sm" variant="outline" onClick={() => setEditing({ ...newGig("income"), title: "Poe Bot 收入", organization: "Poe" })}>Poe Bot 收入</Button></div>} />}
+      action={!archived && <div className="flex flex-wrap justify-center gap-2">{(Object.keys(gigTypes) as Gig["type"][]).map((type, i) => <Button key={type} size="sm" variant={i ? "outline" : "default"} onClick={() => setEditing(newGig(type))}>{gigTypes[type]}</Button>)}</div>} />}
 
     <Dialog open={!!editing} onOpenChange={open => { if (!open && !busy) setEditing(null); }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
       <DialogTitle>{editing?.revision ? "编辑兼职" : "添加兼职"}</DialogTitle><DialogDescription>记录任务与合作安排，具体到账金额在「记收入」中逐笔登记。</DialogDescription>
       {editing && <form className="grid gap-4" onSubmit={e => { e.preventDefault(); void saveEditor(); }}>
-        <Field label="名称"><Input required autoFocus maxLength={300} placeholder="例如：用户访谈、BRAIN 顾问、Poe Bot" value={editing.title} onChange={e => setField("title",e.target.value)} /></Field>
+        <Field label="名称"><Input required autoFocus maxLength={300} placeholder="例如：用户访谈、家教、平台分成" value={editing.title} onChange={e => setField("title",e.target.value)} /></Field>
         <div className="grid gap-4 sm:grid-cols-2"><Field label="类型"><select className={selectClass} value={editing.type} onChange={e => setField("type",e.target.value as Gig["type"])}>{Object.entries(gigTypes).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
           <Field label="状态"><select className={selectClass} value={editing.status} onChange={e => setField("status",e.target.value as Gig["status"])}>{gigStatuses.map(value => <option key={value}>{value}</option>)}</select></Field></div>
         <Field label="平台 / 合作方"><Input value={editing.organization} onChange={e => setField("organization",e.target.value)} /></Field>

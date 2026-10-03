@@ -12,9 +12,10 @@ import { CompanyMark, EmptyState, Panel, Pill, Stat, formatDay, kindCopy, relati
 import ProgressDialog, { newProgress, type ProgressDraft } from "../progress-dialog";
 import { KindIcon, lastActivity } from "./projects";
 import { recruitingReminders } from "@/lib/recruiting-reminders";
+import { RECRUITING_TIME_ZONE } from "@/lib/appointments";
 
 export const eventTone: Record<string, Tone> = { deadline: "red", followup: "blue", interview: "amber", assessment: "violet" };
-function greeting() { const h = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Hong_Kong", hour: "numeric", hour12: false }).format(new Date())); return h < 5 ? "夜深了" : h < 12 ? "早上好" : h < 18 ? "下午好" : "晚上好"; }
+function greeting() { const h = Number(new Intl.DateTimeFormat("en-GB", { timeZone: RECRUITING_TIME_ZONE, hour: "numeric", hour12: false }).format(new Date())); return h < 5 ? "夜深了" : h < 12 ? "早上好" : h < 18 ? "下午好" : "晚上好"; }
 const inStages = (e: Entry, statuses: string[]) => statuses.includes(e.status);
 
 export default function TodayView() {
@@ -34,7 +35,7 @@ export default function TodayView() {
 
   return <>
     <header className="pb-6">
-      <p className="text-sm text-muted-foreground">{formatDay(today())} · 新加坡时间</p>
+      <p className="text-sm text-muted-foreground">{formatDay(today())}</p>
       <h1 className="mt-1 text-2xl font-semibold tracking-tight">{greeting()}</h1>
     </header>
     <DailyBrief />
@@ -98,13 +99,16 @@ export default function TodayView() {
 type Brief = { headline: string; items: { text: string; entryId: string | null; priority: "high" | "normal" }[]; created: string };
 /** AI plan for the day, plus a box to hand anything to the assistant. */
 function DailyBrief() {
-  const { openEntry, askAssistant, data } = useDesk();
+  const { openEntry, askAssistant, data, loading, newEntry } = useDesk();
+  // An empty workspace has nothing to plan; show getting-started steps instead of a generic brief.
+  const empty = !loading && !data.entries.length;
   const [brief, setBrief] = useState<Brief | null>(null), [configured, setConfigured] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState(""), [ask, setAsk] = useState("");
   async function generate() {
     setBusy(true); setError("");
     try { setBrief((await postJson<{ brief: Brief }>("/api/brief", {})).brief); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   useEffect(() => {
+    if (loading || empty) return;
     let active = true;
     // First visit of the day generates the brief; later visits read the cached one.
     fetch("/api/brief", { cache: "no-store" }).then(r => readJson<{ brief: Brief | null; configured: boolean }>(r)).then(d => {
@@ -112,23 +116,24 @@ function DailyBrief() {
       if (!d.brief) { setBusy(true); postJson<{ brief: Brief }>("/api/brief", {}).then(r => { if (active) setBrief(r.brief); }).catch(e => { if (active) setError((e as Error).message); }).finally(() => { if (active) setBusy(false); }); }
     }).catch(e => { if (active) setError((e as Error).message); });
     return () => { active = false; };
-  }, [data]);
+  }, [data, loading, empty]);
   return <section className="overflow-hidden rounded-xl border border-primary/15 bg-gradient-to-br from-accent/70 via-card to-card shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
     <div className="flex items-start gap-3 px-4 pt-4">
       <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground"><Sparkles className="size-4" /></span>
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium text-accent-foreground/80">{configured ? "AI 今日建议" : "今日建议 · 根据记录生成"}</p>
-        <p className="mt-0.5 text-[15px] font-semibold">{busy && !brief ? "正在看今天的安排…" : brief?.headline || error || "还没有生成今天的建议"}</p>
+        <p className="text-xs font-medium text-accent-foreground/80">{empty ? "开始使用" : configured ? "AI 今日建议" : "今日建议 · 根据记录生成"}</p>
+        <p className="mt-0.5 text-[15px] font-semibold">{empty ? "添加第一条记录后，这里每天会给出建议" : busy && !brief ? "正在看今天的安排…" : brief?.headline || error || "还没有生成今天的建议"}</p>
       </div>
-      <Button variant="ghost" size="icon-sm" aria-label="重新生成" disabled={busy} onClick={() => void generate()}>{busy ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}</Button>
+      {!empty && <Button variant="ghost" size="icon-sm" aria-label="重新生成" disabled={busy} onClick={() => void generate()}>{busy ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}</Button>}
     </div>
-    {brief && brief.items.length > 0 && <ol className="mt-2 flex flex-col px-4">{brief.items.map((item, i) => <li key={i} className="flex items-start gap-2.5 py-1.5 text-sm">
+    {empty && <div className="mt-3 flex flex-wrap gap-2 px-4"><Button size="sm" onClick={() => newEntry("job")}><Plus />添加岗位</Button><Button size="sm" variant="outline" onClick={() => newEntry("project")}><FolderKanban />添加项目</Button></div>}
+    {!empty && brief && brief.items.length > 0 && <ol className="mt-2 flex flex-col px-4">{brief.items.map((item, i) => <li key={i} className="flex items-start gap-2.5 py-1.5 text-sm">
       <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", item.priority === "high" ? "bg-red-500" : "bg-primary/50")} />
       {item.entryId ? <button className="text-left hover:text-primary hover:underline" onClick={() => openEntry(item.entryId!)}>{item.text}</button> : <span>{item.text}</span>}
     </li>)}</ol>}
     {error && brief && <p className="px-4 pt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
     <form className="m-3 mt-3 flex items-center gap-2 rounded-lg border bg-background px-3 py-1.5 focus-within:border-primary/50" onSubmit={e => { e.preventDefault(); if (ask.trim()) { askAssistant(ask.trim(), true); setAsk(""); } }}>
-      <input aria-label="告诉 AI 助手" className="h-7 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" placeholder="告诉 AI：设提醒、贴岗位链接、调整求职方向…" value={ask} onChange={e => setAsk(e.target.value)} />
+      <input aria-label="告诉 AI 助手" className="h-7 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" placeholder="告诉 AI：贴岗位链接、设提醒…" value={ask} onChange={e => setAsk(e.target.value)} />
       <Button type="submit" size="icon-xs" className="rounded-full" aria-label="发送" disabled={!ask.trim()}><ArrowUp /></Button>
     </form>
   </section>;

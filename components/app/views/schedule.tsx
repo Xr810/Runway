@@ -19,7 +19,7 @@ export default function ScheduleView() {
   const events = past ? all : all.filter(e => e.date >= today());
   const months = [...new Set(events.map(e => e.date.slice(0, 7)))];
   return <>
-    <PageHeader title="日程" description="截止、跟进、面试与笔试，按日期排列。时间均为香港时间。">
+    <PageHeader title="日程" description="截止、跟进、面试与笔试，按日期排列。">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
         <Segmented value={kind} onChange={setKind} options={[{ value: "all", label: "全部" }, { value: "job", label: "岗位" }, { value: "project", label: "项目" }, { value: "competition", label: "比赛" }]} />
         <label className="flex items-center gap-2 text-[13px] text-muted-foreground"><Switch checked={past} onCheckedChange={setPast} />显示过去的日程（{pastCount}）</label>

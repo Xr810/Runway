@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { type Entry, dayDiff, score } from "@/lib/model";
 import { companySymbol } from "@/lib/journey";
+import { RECRUITING_TIME_ZONE } from "@/lib/appointments";
 
 export const tones = {
   gray: "bg-muted text-muted-foreground ring-border",
@@ -142,7 +143,7 @@ export function Facts({ items, className }: { items: { label: string; value: Rea
   </dl>;
 }
 
-export const stamp = (value: string) => value ? new Date(value).toLocaleString("zh-CN", { timeZone: "Asia/Singapore", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : "";
+export const stamp = (value: string) => value ? new Date(value).toLocaleString("zh-CN", { timeZone: RECRUITING_TIME_ZONE, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : "";
 
 // Field wording per record kind, shared by the detail sheet and the editor.
 export const kindCopy = {

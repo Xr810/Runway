@@ -4,6 +4,7 @@ import { BellRing, Check, ExternalLink, LoaderCircle, Pencil, Plus, Sparkles, Tr
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { today } from "@/lib/model";
+import { RECRUITING_TIME_ZONE } from "@/lib/appointments";
 import { reminderSaveSchema, type Reminder, type Schedule } from "@/lib/reminder-schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useDesk, postJson } from "./store";
 import { Panel, Pill, Segmented } from "./ui";
 
-const nowClock = () => new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Singapore", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
+const nowClock = () => new Intl.DateTimeFormat("en-GB", { timeZone: RECRUITING_TIME_ZONE, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
 const weekdays = [[1, "一"], [2, "二"], [3, "三"], [4, "四"], [5, "五"], [6, "六"], [7, "日"]] as const;
 const blank = (): Reminder => ({ id: crypto.randomUUID(), title: "", note: "", url: "", schedule: { type: "daily", time: "08:00", until: "" }, active: true, entryId: null, source: "user", revision: 0 });
 
@@ -34,7 +35,7 @@ export function TodayReminders() {
       <div className="min-w-0 flex-1">
         <p className={cn("text-sm", r.done && "line-through")}>{r.title}</p>
         <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-          {r.schedule.time ? <span className={cn("tabular", late && "font-medium text-red-600 dark:text-red-400")}>{r.schedule.time}{late ? " · 已过时间" : ""}</span> : <span>全天</span>}
+          {r.schedule.time ? <span className={cn("tabular", late && "font-medium text-red-600 dark:text-red-400")}>{r.schedule.time}{late ? " · 已过" : ""}</span> : <span>全天</span>}
           {r.url && <a className="inline-flex items-center gap-0.5 text-primary hover:underline" href={r.url} target="_blank" rel="noreferrer">打开<ExternalLink className="size-3" /></a>}
           {r.entryId && <button className="text-primary hover:underline" onClick={() => openEntry(r.entryId!)}>相关记录</button>}
         </p>
@@ -42,7 +43,7 @@ export function TodayReminders() {
       <button aria-label="编辑提醒" className="mt-0.5 text-muted-foreground hover:text-foreground" onClick={() => setEditing(r)}><Pencil className="size-3.5" /></button>
     </li>; })}</ul>
       : <div className="flex flex-col gap-2 px-4 py-5"><p className="flex items-center gap-2 text-sm text-muted-foreground"><BellRing className="size-4" />今天没有提醒。</p>
-        <button className="self-start text-xs text-primary hover:underline" onClick={() => askAssistant("每天 8 点提醒我")}><Sparkles className="mr-1 inline size-3" />也可以直接告诉 AI 助手，比如“每天 8 点提醒我去 WorldQuant BRAIN 挖因子”</button></div>}
+        <button className="self-start text-xs text-primary hover:underline" onClick={() => askAssistant("每天 8 点提醒我")}><Sparkles className="mr-1 inline size-3" />也可以直接告诉 AI 助手，比如“每天 8 点提醒我查看招聘邮件”</button></div>}
     <ReminderManager open={managing} onOpenChange={setManaging} onEdit={r => { setManaging(false); setEditing(r); }} />
     <ReminderEditor value={editing} onChange={setEditing} />
   </Panel>;
@@ -98,7 +99,7 @@ export function ReminderEditor({ value, onChange }: { value: Reminder | null; on
     <DialogContent className="sm:max-w-md">
       <DialogHeader><DialogTitle>{value?.revision ? "编辑提醒" : "新增提醒"}</DialogTitle><DialogDescription>到了日子会出现在「今日」页，完成后打勾。</DialogDescription></DialogHeader>
       {value && s && <form id="reminder-form" className="grid gap-4" onSubmit={e => { e.preventDefault(); void save(); }}>
-        <div className="grid gap-1.5"><Label htmlFor="r-title">提醒内容</Label><Input id="r-title" required autoFocus maxLength={300} placeholder="例如：去 WorldQuant BRAIN 挖因子" value={value.title} onChange={e => set({ title: e.target.value })} /></div>
+        <div className="grid gap-1.5"><Label htmlFor="r-title">提醒内容</Label><Input id="r-title" required autoFocus maxLength={300} placeholder="例如：查看招聘邮件" value={value.title} onChange={e => set({ title: e.target.value })} /></div>
         <div className="grid gap-2"><Label>重复</Label>
           <RepeatControl key={value.id} schedule={s} onChange={setSchedule} />
         </div>
@@ -107,7 +108,7 @@ export function ReminderEditor({ value, onChange }: { value: Reminder | null; on
             : <div className="grid gap-1.5"><Label htmlFor="r-until">截止（可选）</Label><Input id="r-until" type="date" value={s.until} onChange={e => setSchedule({ ...s, until: e.target.value })} /></div>}
           <div className="grid gap-1.5"><Label htmlFor="r-time">时间（可选）</Label><Input id="r-time" type="time" value={s.time} onChange={e => setSchedule({ ...s, time: e.target.value })} /></div>
         </div>
-        <div className="grid gap-1.5"><Label htmlFor="r-url">链接（可选）</Label><Input id="r-url" type="url" placeholder="https://platform.worldquantbrain.com" value={value.url} onChange={e => set({ url: e.target.value })} /></div>
+        <div className="grid gap-1.5"><Label htmlFor="r-url">链接（可选）</Label><Input id="r-url" type="url" placeholder="https://" value={value.url} onChange={e => set({ url: e.target.value })} /></div>
         {value.source === "ai" && <p><Pill tone="violet">由 AI 助手创建</Pill></p>}
       </form>}
       <DialogFooter><Button variant="outline" disabled={busy} onClick={() => onChange(null)}>取消</Button><Button type="submit" form="reminder-form" disabled={busy}>{busy ? <LoaderCircle className="animate-spin" /> : <Check />}保存</Button></DialogFooter>

@@ -57,7 +57,7 @@ export default function CompaniesView() {
     if (!editor) return;
     const parsed = editor.type === "company" ? companyProfileSchema.safeParse({ name: editor.name, website: editor.url, logoUrl: editor.logoUrl }) : channelSchema.safeParse({ name: editor.name, url: editor.url, logoUrl: editor.logoUrl });
     if (!parsed.success) { toast.error(parsed.error.issues[0].message); return; }
-    if (!editor.existing && (editor.type === "channel" ? channels : companies).some(c => identity(c.name) === identity(editor.name))) { toast.error("已经有同名的项目了，请直接编辑它"); return; }
+    if (!editor.existing && (editor.type === "channel" ? channels : companies).some(c => identity(c.name) === identity(editor.name))) { toast.error(editor.type === "channel" ? "已经有同名的渠道了，请直接编辑它" : "已经有同名的公司了，请直接编辑它"); return; }
     setBusy(true);
     try {
       const next = editor.type === "company"

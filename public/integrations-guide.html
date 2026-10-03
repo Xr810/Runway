@@ -49,7 +49,7 @@ GET /entries?company=Morgan%20Stanley</pre><p><code>/context</code> 包含公司
     "location": "线上", "status": "scheduled"
   },
   "note": "请提前准备项目介绍。"
-}</pre><p>appointment.id 是岗位内稳定的日程 ID。改期时沿用该 ID，其他轮次用新 ID；取消时保留时间并设 status=cancelled，时间线会移除该预约，详情仍保留。完成时设 completed。type 为 interview、assessment 或 followup。startsAt/endsAt 必须带时区偏移；网站统一以新加坡时间（UTC+8）显示。日期不明时只改进展并发通知，不能虚构预约时间。</p><p>收到邀请不代表已完成面试。岗位状态采用「待投递、已投递、笔试、一面、二面、终面、Offer、未通过、放弃」。可只提交 appointment 或追加 note；patch 只更改明确给出的字段。已有备注会保留，note 为追加。JD 改动保存旧版本，未经人工核对不会标记完整。</p>
+}</pre><p>appointment.id 是岗位内稳定的日程 ID。改期时沿用该 ID，其他轮次用新 ID；取消时保留时间并设 status=cancelled，时间线会移除该预约，详情仍保留。完成时设 completed。type 为 interview、assessment 或 followup。startsAt/endsAt 必须带时区偏移；网站统一以 UTC+8 显示。日期不明时只改进展并发通知，不能虚构预约时间。</p><p>收到邀请不代表已完成面试。岗位状态采用「待投递、已投递、笔试、一面、二面、终面、Offer、未通过、放弃」。可只提交 appointment 或追加 note；patch 只更改明确给出的字段。已有备注会保留，note 为追加。JD 改动保存旧版本，未经人工核对不会标记完整。</p>
 <h2>5. 无法确认时只通知</h2><pre>{
   "requestId": "email:ambiguous-message-id:review",
   "action": "notify",

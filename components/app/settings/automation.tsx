@@ -30,7 +30,7 @@ export default function AutomationSettings() {
       {!settings ? <LoaderCircle className="size-4 animate-spin text-muted-foreground" /> : <div className="flex flex-col gap-4">
         <label className="flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm">每天自动扫描<Switch checked={settings.enabled} onCheckedChange={v => setDraft({ ...settings, enabled: v })} /></label>
         <div className="grid grid-cols-2 gap-3">
-          <div className="grid gap-1.5"><Label htmlFor="s-time">扫描时间（新加坡时间）</Label><Input id="s-time" type="time" value={settings.time} onChange={e => setDraft({ ...settings, time: e.target.value })} /></div>
+          <div className="grid gap-1.5"><Label htmlFor="s-time">扫描时间</Label><Input id="s-time" type="time" value={settings.time} onChange={e => setDraft({ ...settings, time: e.target.value })} /></div>
           <div className="grid gap-1.5"><Label htmlFor="s-max">每个关注每次最多加入</Label><Input id="s-max" type="number" min={1} max={20} value={settings.maxAddPerWatch} onChange={e => setDraft({ ...settings, maxAddPerWatch: Math.min(20, Math.max(1, Number(e.target.value) || 1)) })} /></div>
         </div>
         <p className="text-xs text-muted-foreground">扫描会跳过已经判断过的岗位，所以每天只处理新出现的职位。筛选标准来自 <Link href="/settings?section=profile" className="text-primary hover:underline">个人背景</Link> 里的简历和期待方向。</p>

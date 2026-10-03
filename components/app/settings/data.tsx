@@ -110,7 +110,7 @@ export default function DataSettings() {
     </Panel>
     <Dialog open={!!restore} onOpenChange={open => { if (!open && !busy) setRestore(null); }}>
       <DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>确认恢复</DialogTitle><DialogDescription>只会新增不存在的记录，已有记录保持不变。</DialogDescription></DialogHeader>
-        <p className="text-sm">{restore?.manifest.entries.length} 条记录 · {restore?.manifest.deleted?.length || 0} 条回收站记录 · {restore?.manifest.files.length} 个附件 · {restore?.manifest.watches?.length || 0} 家关注公司 · {restore?.manifest.reminders?.length || 0} 个提醒 · {restore?.manifest.partTime?.length || 0} 项兼职与收入</p>
+        <p className="text-sm">{restore?.manifest.entries.length} 条记录 · {restore?.manifest.deleted?.length || 0} 条回收站记录 · {restore?.manifest.files.length} 个附件 · {restore?.manifest.watches?.length || 0} 个关注 · {restore?.manifest.reminders?.length || 0} 个提醒 · {restore?.manifest.partTime?.length || 0} 项兼职与收入</p>
         <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setRestore(null)}>取消</Button><Button disabled={busy} onClick={() => void runRestore()}>{busy ? <LoaderCircle className="animate-spin" /> : <Upload />}开始恢复</Button></DialogFooter>
       </DialogContent>
     </Dialog>

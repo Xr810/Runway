@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Bot, Building2, ChevronDown, ImageDown, LoaderCircle, Radar, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { RECRUITING_TIME_ZONE } from "@/lib/appointments";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useDesk, readJson, postJson } from "./store";
@@ -36,7 +37,7 @@ export function useScan(withHistory = false) {
 export function ScanStatus({ run, className }: { run?: ScanRun; className?: string }) {
   if (!run) return <span className={cn("text-xs text-muted-foreground", className)}>还没有扫描过</span>;
   if (run.status === "running") return <span className={cn("inline-flex items-center gap-1 text-xs text-primary", className)}><LoaderCircle className="size-3 animate-spin" />正在扫描…</span>;
-  const when = relativeDay(new Date(run.started_at).toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" }));
+  const when = relativeDay(new Date(run.started_at).toLocaleDateString("en-CA", { timeZone: RECRUITING_TIME_ZONE }));
   if (run.status === "failed") return <span className={cn("text-xs text-red-600 dark:text-red-400", className)} title={run.error}>{when}扫描失败：{run.error}</span>;
   return <span className={cn("text-xs text-muted-foreground", className)} title={stamp(run.started_at)}>{when}扫描 · 找到 {run.found} 个{run.added ? <>，<b className="font-medium text-emerald-700 dark:text-emerald-400">新增 {run.added}</b></> : "，没有新岗位"}{run.detail?.source ? ` · ${run.detail.source}` : ""}</span>;
 }

@@ -38,7 +38,7 @@ function Overview({ jobs,weights,assessments }: { jobs: Entry[]; weights?:Evalua
   const byId=new Map(assessments.map(s=>[s.id,s.result]));
   const evalScore=(e:Entry)=>{const r=byId.get(e.id);return score(e,weights,r?{returnOffer:r.returnOffer?.score??null,academic:r.academic?.score??null}:undefined)};
   const scored = jobs.filter(e => evalScore(e) !== null).sort((a, b) => evalScore(b)! - evalScore(a)!).slice(0, 8);
-  const scatter = jobs.flatMap(e=>{const r=byId.get(e.id);const y=internshipValue({...e,career:r?.career.score??e.career,returnOffer:r?.returnOffer?.score??e.returnOffer,academic:r?.academic?.score??e.academic});return e.fit!==null&&y!==null?[{x:e.fit,y,name:e.organization+" · "+e.title,id:e.id}]:[]});
+  const scatter = jobs.flatMap(e=>{const r=byId.get(e.id);const y=internshipValue({...e,career:r?.career?.score??e.career,returnOffer:r?.returnOffer?.score??e.returnOffer,academic:r?.academic?.score??e.academic});return e.fit!==null&&y!==null?[{x:e.fit,y,name:e.organization+" · "+e.title,id:e.id}]:[]});
   return <div className="flex flex-col gap-6">
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <Stat label="岗位总数" value={jobs.length} hint={`${jobs.filter(e => e.status === "待投递").length} 个还没投递`} />

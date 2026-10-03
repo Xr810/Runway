@@ -107,7 +107,7 @@ export default function JobsView() {
           </PopoverContent>
         </Popover>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="bg-card"><ArrowDownUp />{sorts[sort]}</Button></DropdownMenuTrigger>
+          <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="bg-card"><ArrowDownUp />排序：{sorts[sort]}</Button></DropdownMenuTrigger>
           <DropdownMenuContent align="start"><DropdownMenuLabel className="text-xs text-muted-foreground">排序</DropdownMenuLabel><DropdownMenuSeparator />
             <DropdownMenuRadioGroup value={sort} onValueChange={v => setSort(v as Sort)}>{Object.entries(sorts).map(([k, v]) => <DropdownMenuRadioItem key={k} value={k}>{v}</DropdownMenuRadioItem>)}</DropdownMenuRadioGroup>
           </DropdownMenuContent>

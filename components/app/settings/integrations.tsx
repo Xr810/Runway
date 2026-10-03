@@ -25,7 +25,7 @@ export default function IntegrationSettings() {
       <div className="flex flex-col gap-3 text-sm">
         <Input readOnly value={base} aria-label="接口地址" className="font-mono text-xs" />
         <p className="text-muted-foreground">认证请求头：<code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">Authorization: Bearer &lt;API Key&gt;</code></p>
-        <p className="text-xs text-muted-foreground">网站前面还有 Cloudflare Access。外部服务除了这里的 API Key，还需要 Access Service Token 的 Client ID 和 Secret，两层认证互相独立。</p>
+        <p className="text-xs text-muted-foreground">如果网站部署在 Cloudflare Access 等访问网关后面，外部服务除了这里的 API Key，还需要网关自己的凭据。</p>
         <p className="text-xs text-muted-foreground">允许：读取关注公司与岗位；新增岗位、更新状态和日程、发送通知；读取个人背景、领取并回写评估与图标任务。不允许：删除岗位、读取模型密钥、修改网站设置。</p>
         <div className="flex flex-wrap gap-4"><a className="inline-flex items-center gap-1 text-primary hover:underline" href="/integrations-guide.html" target="_blank" rel="noreferrer">接入说明与请求示例<ExternalLink className="size-3.5" /></a><a className="inline-flex items-center gap-1 text-primary hover:underline" href="/muse-tasks-guide.md" target="_blank" rel="noreferrer">评估与图标任务协议<ExternalLink className="size-3.5" /></a></div>
       </div>
