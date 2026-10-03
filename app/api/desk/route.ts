@@ -7,6 +7,8 @@ import { EntryError, deleteEntry, getEntry, listDeleted, listEntries, listSummar
 import { allWatches } from "@/lib/watch-storage";
 import { getDirectory } from "@/lib/directory-storage";
 import { syncEnrichment } from "@/lib/enrichment";
+import { evaluationProfile } from "@/lib/enrichment";
+import { listReminders } from "@/lib/reminders";
 import { getReminderPreferences } from "@/lib/reminder-preferences";
 export const dynamic = "force-dynamic";
 
@@ -46,6 +48,12 @@ export async function GET(request: Request) {
     if (params.get("deleted")) return json({ entries: await listDeleted() });
     const full = params.get("export") === "1";
     const [entries, files, versions, watches, directory, reminderPreferences] = await Promise.all([full ? listEntries() : listSummaries(), pool.query("SELECT * FROM files ORDER BY created DESC").then(r => r.rows), listVersions(undefined, full), allWatches(), getDirectory(), getReminderPreferences()]);
+    // A full export also carries the recycle bin, reminders and personal background, so
+    // attachments of trashed records have parents and nothing is lost on migration (#2 #9).
+    if (full) {
+      const [deleted, reminders, profile] = await Promise.all([listDeleted(), listReminders().then(r => r.reminders), evaluationProfile()]);
+      return json({ entries, files, versions, watches, directory, reminderPreferences, deleted, reminders, profile });
+    }
     return json({ entries, files, versions, watches, directory, reminderPreferences });
   } catch (e) { console.error(e); return json({ error: "读取失败，请稍后重试" }, 503); }
 }
