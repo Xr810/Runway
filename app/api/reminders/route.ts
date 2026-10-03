@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { getUser } from "@/lib/auth";
 import { validOrigin } from "@/lib/session";
-import { today } from "@/lib/model";
+import { today, validCalendarDate } from "@/lib/model";
 import { ReminderError, deleteReminder, listReminders, markReminder, saveReminder } from "@/lib/reminders";
 import { boundedJson, integrationJson as json, integrationFailure } from "@/lib/integration-http";
 export const dynamic = "force-dynamic";
-const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const day = z.string().max(10).refine(validCalendarDate, "日期无效");
 const actions = z.discriminatedUnion("action", [
   z.object({ action: z.literal("save"), reminder: z.unknown() }),
   z.object({ action: z.literal("delete"), id: z.string().max(100) }),

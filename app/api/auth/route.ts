@@ -10,6 +10,7 @@ export async function POST(request: Request) {
     const text = await request.text();
     if (text.length > 4096) return NextResponse.json({ error: "请求过大" }, { status: 413 });
     let body: Record<string, unknown>; try { body = JSON.parse(text); } catch { return NextResponse.json({ error: "请求格式无效" }, { status: 400 }); }
+    if (typeof body !== "object" || body === null || Array.isArray(body)) return NextResponse.json({ error: "请求格式无效" }, { status: 400 });
     const oldToken = request.headers.get("cookie")?.match(new RegExp(`(?:^|; )${cookieName}=([^;]+)`))?.[1];
     if (body.action === "logout" || body.action === "logout-all") {
       const user = await getUser();
