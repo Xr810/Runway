@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { entryObject, entrySchema, blankEntry, defaultJobDeadline, defaultNextAction, today, type Entry } from "./model";
-import { appointmentSchema } from "./appointments";
+import { appointmentSchema, normalizeStageStates } from "./appointments";
 import { progressSchema } from "./model";
 import { companyProfileSchema, channelSchema, directorySchema, identity, type Directory } from "./journey";
 import { gigSchema, incomeSchema, newGig, type Gig } from "./part-time-contract";
@@ -77,7 +77,7 @@ export function prepareAgentActions(raw: unknown[], s: AgentSnapshot): AgentDraf
       if ("id" in a.fields) throw Error("AI 不能改写日程或进度的 ID。");
       const item = a.operation === "delete" ? null : schema.parse({ ...previous, ...a.fields, id: previous?.id ?? crypto.randomUUID() });
       const updated = a.operation === "add" ? [...items, item!] : items.flatMap(p => p.id === previous!.id ? item ? [item] : [] : [p]);
-      const next = entrySchema.parse({ ...old, [field]: updated });
+      const next = entrySchema.parse({ ...old, [field]: a.module === "appointment" ? normalizeStageStates(updated as typeof old.appointments) : updated });
       return draft((a.module === "appointment" ? "日程：" : "进度：") + old.title, "/api/desk", { action: "save", entry: next }, changes(old, next, [field]));
     }
     if (a.module === "company" || a.module === "channel") {
