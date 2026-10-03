@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useDesk, type VersionFull } from "./store";
 import { CompanyMark, EmptyState, Facts, Pill, ScoreValue, formatDay, kindCopy, relativeDay, stamp, toneOf, StatusBadge } from "./ui";
 import { KindIcon } from "./views/projects";
-import { EvaluationTimeline } from "./evaluation";
+import { EvaluationTimeline, useEnrichment } from "./evaluation";
 import ProgressDialog, { newProgress, type ProgressDraft } from "./progress-dialog";
 
 function download(blob: Blob, name: string) { const u = URL.createObjectURL(blob), a = document.createElement("a"); a.href = u; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(u), 10000); }
@@ -34,6 +34,9 @@ function DateCell({ label, value }: { label: string; value: string }) {
 
 export default function EntryDetail() {
   const { selected: entry, selectedVersions: versions, selectedLoading, closeEntry, editEntry, data, patchEntry, removeEntry, upload, logoFor, reload } = useDesk();
+  // Composite scores follow the same custom weights as 洞察 (#6).
+  const { feed } = useEnrichment();
+  const weights = feed?.profile.evaluationWeights;
   const [version, setVersion] = useState<VersionFull | null>(null), [busy, setBusy] = useState(false), [progress, setProgress] = useState<ProgressDraft | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const isJob = entry?.kind === "job", copy = kindCopy[entry?.kind ?? "job"];
@@ -64,7 +67,7 @@ export default function EntryDetail() {
                 <SelectContent>{statusesFor(entry.kind).map(s => <SelectItem key={s} value={s}><Pill tone={toneOf(s)} dot>{s}</Pill></SelectItem>)}</SelectContent>
               </Select>
               {entry.priority && <Pill tone={entry.priority.includes("高") ? "red" : "gray"}>优先级 {entry.priority}</Pill>}
-              {isJob && score(entry) !== null && <Pill tone="blue">综合 <ScoreValue entry={entry} /></Pill>}
+              {isJob && score(entry, weights) !== null && <Pill tone="blue">综合 <ScoreValue entry={entry} weights={weights} /></Pill>}
               <div className="ml-auto flex gap-2">
                 {entry.url && <Button variant="outline" size="sm" asChild><a href={entry.url} target="_blank" rel="noreferrer"><ExternalLink />{entry.kind === "project" ? "打开项目" : "原始页面"}</a></Button>}
                 <Button size="sm" onClick={() => editEntry(entry)}><Pencil />编辑</Button>
@@ -140,7 +143,7 @@ export default function EntryDetail() {
                 {entry.summary && <details open={!entry.jd} className="rounded-lg border bg-card"><summary className="cursor-pointer px-3 py-2.5 text-xs text-muted-foreground">摘要 / 摘录</summary><p className="border-t px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">{entry.summary}</p></details>}
               </TabsContent>
               {isJob && <TabsContent value="evaluation" className="flex flex-col gap-5">
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{([["综合", score(entry)], ["岗位匹配度", entry.fit], ["职业路径与成长", entry.career], ["Return Offer / 转正", entry.returnOffer], ["学术与升学帮助", entry.academic], ["公司 / 行业前景", entry.outlook]] as const).map(([label, value], i) => <div key={label} className={i === 0 ? "rounded-lg bg-primary px-3 py-2.5 text-primary-foreground" : "rounded-lg border bg-card px-3 py-2.5"}>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{([["综合", score(entry, weights)], ["岗位匹配度", entry.fit], ["职业路径与成长", entry.career], ["Return Offer / 转正", entry.returnOffer], ["学术与升学帮助", entry.academic], ["公司 / 行业前景", entry.outlook]] as const).map(([label, value], i) => <div key={label} className={i === 0 ? "rounded-lg bg-primary px-3 py-2.5 text-primary-foreground" : "rounded-lg border bg-card px-3 py-2.5"}>
                   <p className={i === 0 ? "text-xs opacity-80" : "text-xs text-muted-foreground"}>{label}</p><p className="tabular mt-0.5 text-xl font-semibold">{value === null ? "—" : value.toFixed?.(1) ?? value}</p>
                 </div>)}</div>
                 <p className="text-xs text-muted-foreground">手动修改分数会自动锁定当前结果，防止被自动评估覆盖。</p>

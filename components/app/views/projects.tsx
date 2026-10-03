@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { CalendarDays, ChevronDown, Clock3, Flag, FolderKanban, Pencil, Plus, Search, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Entry, type ProgressLog, closed, dayDiff, today } from "@/lib/model";
@@ -26,11 +27,21 @@ export function KindIcon({ kind, className }: { kind: Entry["kind"]; className?:
 
 export default function ProjectsView() {
   const { data, newEntry, aiFilter, applyAiFilter } = useDesk();
+  const params = useSearchParams();
   const thisYear = Number(today().slice(0, 4));
-  const [kind, setKind] = useState<"all" | "project" | "competition">("all");
-  const [query, setQuery] = useState(""), [year, setYear] = useState(thisYear), [onlyActive, setOnlyActive] = useState(true), [progress, setProgress] = useState<ProgressDraft | null>(null);
+  const [kind, setKind] = useState<"all" | "project" | "competition">(() => { const k = params.get("kind"); return k === "project" || k === "competition" ? k : "all"; });
+  const [query, setQuery] = useState(params.get("q") || ""), [year, setYear] = useState(thisYear), [onlyActive, setOnlyActive] = useState(true), [progress, setProgress] = useState<ProgressDraft | null>(null);
+  // A ?q=&kind= link (e.g. from a browser agent) replaces the search and type when it changes (#7 #19).
+  const [linked, setLinked] = useState({ q: params.get("q"), kind: params.get("kind") });
+  if (params.get("q") !== linked.q || params.get("kind") !== linked.kind) {
+    setLinked({ q: params.get("q"), kind: params.get("kind") });
+    if (params.get("q") !== null) setQuery(params.get("q")!);
+    const k = params.get("kind");
+    if (k === "all" || k === "project" || k === "competition") setKind(k);
+  }
   const all = data.entries.filter(isTrack);
-  const aiActive = aiFilter && (aiFilter.kind === "competition" || aiFilter.kind === "project");
+  // A cross-module filter ("all") should also narrow this page, not only the jobs page (#22).
+  const aiActive = aiFilter && (aiFilter.kind === "competition" || aiFilter.kind === "project" || aiFilter.kind === "all");
   const items = all.filter(e => (kind === "all" || e.kind === kind) && (!aiActive || (aiFilter!.ids ? aiFilter!.ids.includes(e.id) : matchesAiFilter(e, aiFilter!))) && (!onlyActive || !closed(e))
     && [e.title, e.organization, e.notes].join(" ").toLowerCase().includes(query.toLowerCase()))
     .sort((a, b) => lastActivity(b).localeCompare(lastActivity(a)));

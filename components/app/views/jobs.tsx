@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useDesk } from "../store";
 import { CompanyMark, DueLabel, EmptyState, PageHeader, ScoreValue, Segmented, StatusBadge, jobStages, solidTones, stageOf, type Tone, type StageKey } from "../ui";
 import { jdLabel } from "../entry-detail";
+import { useEnrichment } from "../evaluation";
 
 const attributes = [
   { key: "workMode", label: "工作模式", options: workModes },
@@ -42,6 +43,9 @@ function writeLayout(value: "list" | "board") { try { localStorage.setItem("runw
 
 export default function JobsView() {
   const { data, loading, error, reload, openEntry, newEntry, logoFor, aiFilter, applyAiFilter } = useDesk();
+  // The composite score must use the same custom weights as 洞察 (#6).
+  const { feed } = useEnrichment();
+  const weights = feed?.profile.evaluationWeights;
   const params = useSearchParams();
   const [query, setQuery] = useState(params.get("q") || ""), [stage, setStage] = useState<StageKey | "all" | "active">("active");
   const [filters, setFilters] = useState<Partial<Record<AttrKey, string>>>({}), [sort, setSort] = useState<Sort>("priority");
@@ -50,7 +54,8 @@ export default function JobsView() {
   const [linkedQuery, setLinkedQuery] = useState(params.get("q"));
   if (params.get("q") !== linkedQuery) { setLinkedQuery(params.get("q")); if (params.get("q") !== null) setQuery(params.get("q")!); }
 
-  const pool = useMemo(() => data.entries.filter(e => aiFilter?.kind === "all" ? true : e.kind === "job"), [data.entries, aiFilter]);
+  // This page only ever lists jobs; a cross-module AI filter must not pull in tracks (#22).
+  const pool = useMemo(() => data.entries.filter(e => e.kind === "job"), [data.entries]);
   const base = useMemo(() => pool.filter(e => (!aiFilter || (aiFilter.ids ? aiFilter.ids.includes(e.id) : matchesAiFilter(e, aiFilter)))
     && attributes.every(a => !filters[a.key] || e[a.key] === filters[a.key])
     && (!query || [e.title, e.organization, e.notes, e.location, e.nextAction, e.summary, e.applicationChannel].join(" ").toLowerCase().includes(query.toLowerCase()))), [pool, aiFilter, filters, query]);
@@ -58,12 +63,12 @@ export default function JobsView() {
   const visible = useMemo(() => {
     const order = new Map(data.entries.map((e, i) => [e.id, i]));
     return base.filter(e => layout === "board" || stage === "all" || (stage === "active" ? !closed(e) : stageOf(e.status)?.key === stage)).sort((a, b) =>
-      sort === "score" ? (score(b) ?? -1) - (score(a) ?? -1)
+      sort === "score" ? (score(b, weights) ?? -1) - (score(a, weights) ?? -1)
         : sort === "deadline" ? (keyDate(a)?.date || "9999").localeCompare(keyDate(b)?.date || "9999")
           : sort === "company" ? a.organization.localeCompare(b.organization)
             : sort === "updated" ? order.get(a.id)! - order.get(b.id)!
               : rank(a.priority) - rank(b.priority) || (a.deadline || "9999").localeCompare(b.deadline || "9999"));
-  }, [base, stage, sort, layout, data.entries]);
+  }, [base, stage, sort, layout, data.entries, weights]);
   const activeFilters = attributes.filter(a => filters[a.key]).length;
   const activeCount = base.filter(e => !closed(e)).length;
 
@@ -116,7 +121,7 @@ export default function JobsView() {
       {error && <div role="alert" className="mb-4 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-400/20 dark:bg-red-400/10 dark:text-red-300">{error}<Button size="sm" variant="outline" onClick={() => void reload()}>重新加载</Button></div>}
       {loading ? <div className="space-y-2">{Array.from({ length: 6 }, (_, i) => <div key={i} className="h-14 animate-pulse rounded-lg bg-muted" />)}</div>
         : layout === "board" ? <Board entries={visible} />
-          : visible.length ? <JobTable entries={visible} onOpen={openEntry} logoFor={logoFor} />
+          : visible.length ? <JobTable entries={visible} onOpen={openEntry} logoFor={logoFor} weights={weights} />
             : <EmptyState icon={<BriefcaseBusiness />} title={pool.length ? "没有符合条件的岗位" : "还没有岗位"} description={pool.length ? "换个关键词，或者清除筛选条件。" : "添加第一个岗位，或者把招聘截图交给 AI 助手整理。"}
               action={pool.length ? <Button size="sm" variant="outline" onClick={() => { setQuery(""); setFilters({}); setStage("all"); applyAiFilter(null); }}>清除全部条件</Button> : <Button size="sm" onClick={() => newEntry("job")}><Plus />添加岗位</Button>} />}
     </div>
@@ -132,7 +137,7 @@ function PriorityFlag({ priority }: { priority: string }) {
   return <Tooltip><TooltipTrigger asChild><Flag className={cn("size-3.5 shrink-0", priority.includes("高") || priority.includes("P0") ? "fill-red-500 text-red-500" : "fill-amber-400 text-amber-500")} /></TooltipTrigger><TooltipContent>优先级 {priority}</TooltipContent></Tooltip>;
 }
 
-function JobTable({ entries, onOpen, logoFor }: { entries: Entry[]; onOpen: (id: string) => void; logoFor: (name: string) => string }) {
+function JobTable({ entries, onOpen, logoFor, weights }: { entries: Entry[]; onOpen: (id: string) => void; logoFor: (name: string) => string; weights?: Parameters<typeof score>[1] }) {
   return <>
     <div className="hidden overflow-hidden rounded-xl border bg-card md:block">
       <table className="w-full table-fixed text-sm">
@@ -149,7 +154,7 @@ function JobTable({ entries, onOpen, logoFor }: { entries: Entry[]; onOpen: (id:
           <td className="px-3 py-3"><StatusBadge status={e.status} /></td>
           <td className="px-3 py-3"><p className="line-clamp-2 text-[13px] text-muted-foreground">{e.nextAction || "—"}</p></td>
           <td className="px-3 py-3">{k ? <DueLabel date={k.date} kind={k.kind} /> : <span className="text-muted-foreground">—</span>}</td>
-          <td className="px-3 py-3 text-right"><ScoreValue entry={e} /></td>
+          <td className="px-3 py-3 text-right"><ScoreValue entry={e} weights={weights} /></td>
           <td className="px-3 py-3"><JdIcon entry={e} /></td>
         </tr>; })}</tbody>
       </table>
@@ -159,7 +164,7 @@ function JobTable({ entries, onOpen, logoFor }: { entries: Entry[]; onOpen: (id:
       <div className="min-w-0 flex-1"><p className="flex items-center gap-1.5 text-sm font-medium"><span className="truncate">{e.title}</span><PriorityFlag priority={e.priority} /></p><p className="truncate text-xs text-muted-foreground">{e.organization}{e.location ? " · " + e.location : ""}</p>
         <div className="mt-2 flex flex-wrap items-center gap-2"><StatusBadge status={e.status} />{k && <span className="text-xs text-muted-foreground">{k.kind} {k.date.slice(5)} · {dayDiff(k.date) >= 0 ? dayDiff(k.date) + " 天后" : "已过"}</span>}</div>
         {e.nextAction && <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">{e.nextAction}</p>}</div>
-      <ScoreValue entry={e} className="text-sm" />
+      <ScoreValue entry={e} weights={weights} className="text-sm" />
     </button></li>; })}</ul>
   </>;
 }
