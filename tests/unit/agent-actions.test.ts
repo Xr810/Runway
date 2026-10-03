@@ -24,6 +24,14 @@ test("all editable entry fields are accepted, system fields and unknown fields r
   assert.throws(() => one({ module: "entry", operation: "delete", targetId: "missing" }));
   assert.equal(body(one({ module: "entry", operation: "restore", targetId: "deleted" })).action, "undelete");
 });
+test("agent job status changes follow the editor's next-action linkage", () => {
+  assert.equal(body(one({ module: "entry", operation: "update", targetId: job.id, fields: { status: "已投递" } })).entry.nextAction, "跟进申请");
+  assert.equal(body(one({ module: "entry", operation: "update", targetId: job.id, fields: { status: "放弃" } })).entry.nextAction, "");
+  assert.equal(body(one({ module: "entry", operation: "update", targetId: job.id, fields: { status: "未通过", nextAction: "复盘" } })).entry.nextAction, "复盘");
+  const tracked = { ...blankEntry("project"), id: "tracked", title: "Tracked", revision: 1, nextAction: "复盘" };
+  const draft = prepareAgentActions([{ module: "entry", operation: "update", targetId: "tracked", fields: { status: "暂停" } }], { ...snapshot, entries: [...snapshot.entries, tracked] })[0];
+  assert.equal((draft.body as { entry: { nextAction: string } }).entry.nextAction, "复盘", "non-job status changes keep their next action");
+});
 test("nested edits preserve other data and use the parent revision", () => {
   const added = body(one({ module: "appointment", operation: "add", targetId: job.id, fields: { title: "Interview", type: "interview", startsAt: "2026-10-01T14:00:00+08:00" } })).entry;
   assert.equal(added.appointments.length, 1); assert(added.appointments[0].id); assert.equal(added.jd, job.jd); assert.equal(added.revision, 5);

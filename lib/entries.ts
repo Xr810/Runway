@@ -82,7 +82,7 @@ export async function patchEntry(id: string, revision: number, patch: Record<str
     const previous = parse(row);
     if (previous.revision !== revision) throw new EntryError(409, "记录已更新，请重新加载");
     const normalized={...previous,...patch};
-    if (patch.status !== undefined && patch.nextAction === undefined) normalized.nextAction=defaultNextAction(String(patch.status))||normalized.nextAction;
+    if (normalized.kind === "job" && patch.status !== undefined && patch.nextAction === undefined) normalized.nextAction=defaultNextAction(String(patch.status));
     const originalNext=normalized.nextAction,legacyNext=normalizeLegacyNextAction(normalized.status,originalNext);
     if (legacyNext) { normalized.nextAction=legacyNext; if (!normalized.deadline) normalized.deadline=defaultJobDeadline({...normalized,nextAction:originalNext}); }
     const next = entrySchema.safeParse(normalized);

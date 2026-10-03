@@ -40,7 +40,10 @@ export default function EntryEditor() {
   const [value, setValue] = useState<Entry | null>(null), [busy, setBusy] = useState(false);
   // Reset the working copy whenever a new draft is opened.
   const [source, setSource] = useState<Entry | null>(null);
-  if (draft !== source) { setSource(draft); setValue(draft); }
+  // "Custom next action" is a UI mode, kept apart from the text so typing does not
+  // unmount the input (#3).
+  const [customNext, setCustomNext] = useState(false);
+  if (draft !== source) { setSource(draft); setValue(draft); setCustomNext(!!draft && draft.nextAction !== "" && !nextActions.includes(draft.nextAction)); }
   const set = (key: keyof Entry, v: unknown) => setValue(d => d ? { ...d, [key]: v } : d);
   const isJob = value?.kind === "job", isNew = !!value && !value.revision, copy = kindCopy[value?.kind ?? "job"], isProject = value?.kind === "project";
   async function save() {
@@ -64,9 +67,9 @@ export default function EntryEditor() {
           <Field label={copy.url} htmlFor="f-url" wide><Input id="f-url" type="url" placeholder="https://" value={value.url} onChange={e => set("url", e.target.value)} /></Field>
         </Group>
         <Group title="状态与计划" description="下一步和各个日期会出现在「今日」和「日程」里。">
-          <Field label="状态" htmlFor="f-status"><Choice id="f-status" value={value.status} onChange={v => {set("status",v);if(isJob&&defaultNextAction(v))set("nextAction",defaultNextAction(v));}} options={statusesFor(value.kind)} /></Field>
+          <Field label="状态" htmlFor="f-status"><Choice id="f-status" value={value.status} onChange={v => {set("status",v);if(isJob){set("nextAction",defaultNextAction(v));setCustomNext(false);}}} options={statusesFor(value.kind)} /></Field>
           <Field label="优先级" htmlFor="f-priority"><Choice id="f-priority" value={value.priority} onChange={v => set("priority", v)} options={Array.from(new Set(["", "高", "中", "低", value.priority]))} /></Field>
-          {isJob ? <Field label="下一步" htmlFor="f-next" wide><Choice id="f-next" value={value.nextAction} onChange={v=>set("nextAction",v==="自定义"?"":v)} options={[...nextActions,...(value.nextAction&&!nextActions.includes(value.nextAction)?[value.nextAction]:[])]} placeholder="选择下一步" />{(value.nextAction===""||value.nextAction==="自定义")&&<Input className="mt-2" aria-label="自定义下一步" placeholder="输入自定义事项" value={value.nextAction==="自定义"?"":value.nextAction} onChange={e=>set("nextAction",e.target.value)} />}</Field> : <Field label="下一步" htmlFor="f-next" wide><Input id="f-next" placeholder={copy.next} value={value.nextAction} onChange={e => set("nextAction", e.target.value)} /></Field>}
+          {isJob ? <Field label="下一步" htmlFor="f-next" wide><Choice id="f-next" value={customNext ? "自定义" : value.nextAction} onChange={v=>{if(v==="自定义")setCustomNext(true);else{setCustomNext(false);set("nextAction",v);}}} options={nextActions} placeholder="选择下一步" />{customNext&&<Input className="mt-2" aria-label="自定义下一步" placeholder="输入自定义事项" value={value.nextAction} onChange={e=>set("nextAction",e.target.value)} />}</Field> : <Field label="下一步" htmlFor="f-next" wide><Input id="f-next" placeholder={copy.next} value={value.nextAction} onChange={e => set("nextAction", e.target.value)} /></Field>}
           <Field label={isProject ? "目标日期" : "截止日期"} htmlFor="f-deadline" hint={isJob&&!value.deadline?"未知时留空，不会自动生成截止日期。":""}><Input id="f-deadline" type="date" value={value.deadline || (isNew&&isJob?defaultJobDeadline(value):"")} onChange={e => set("deadline", e.target.value)} /></Field>
           <Field label={copy.followUp + "日期"} htmlFor="f-follow"><Input id="f-follow" type="date" value={value.followUp} onChange={e => set("followUp", e.target.value)} /></Field>
           <Field label={copy.applied + "日期"} htmlFor="f-applied"><Input id="f-applied" type="date" value={value.applied} onChange={e => set("applied", e.target.value)} /></Field>
