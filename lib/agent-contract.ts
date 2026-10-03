@@ -62,8 +62,11 @@ export function prepareAgentActions(raw: unknown[], s: AgentSnapshot): AgentDraf
       const old = requireItem((a.operation === "restore" ? s.deleted : s.entries).find(e => e.id === a.targetId));
       if (a.operation !== "update") return draft((a.operation === "delete" ? "移至回收站：" : "恢复：") + old.title, "/api/desk", { action: a.operation === "delete" ? "delete" : "undelete", id: old.id, revision: old.revision });
       const patch = entryAgentFields.parse(a.fields);
-      const next = entrySchema.parse({ ...old, ...patch });
-      return { ...draft("修改：" + old.title, "/api/desk", { action: "save", entry: next }, changes(old, next, Object.keys(patch))), sourceImageIds: a.sourceImageIds };
+      // A job whose status changes without an explicit next action follows the same
+      // linkage as manual edits; closed stages clear the stale action (#18).
+      const effective = old.kind === "job" && patch.status !== undefined && patch.nextAction === undefined ? { ...patch, nextAction: defaultNextAction(patch.status) } : patch;
+      const next = entrySchema.parse({ ...old, ...effective });
+      return { ...draft("修改：" + old.title, "/api/desk", { action: "save", entry: next }, changes(old, next, Object.keys(effective))), sourceImageIds: a.sourceImageIds };
     }
     if (a.module === "appointment" || a.module === "progress") {
       const old = requireItem(s.entries.find(e => e.id === a.targetId));

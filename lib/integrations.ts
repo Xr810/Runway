@@ -2,7 +2,7 @@ import {createHash,randomBytes,randomUUID} from "node:crypto";
 import {pool,locks} from "./postgres";
 import {notify} from "./notifications";
 import {syncEnrichment} from "./enrichment";
-import {blankEntry,entrySchema,type Entry} from "./model";
+import {blankEntry,defaultNextAction,entrySchema,type Entry} from "./model";
 import {type IntegrationEvent,IntegrationError,canonicalUrl,changedFields,guardStatus,validateJob} from "./integration-contract";
 const hash=(value:string)=>createHash("sha256").update(value).digest("hex");
 export type IntegrationClient={id:string;name:string};
@@ -52,9 +52,11 @@ export async function applyIntegrationEvent(actor:IntegrationClient,event:Integr
     const newer=await client.query("SELECT 1 FROM integration_events WHERE entry_id=$1 AND action='update_job' AND source_kind=$2 AND occurred_at>$3::timestamptz LIMIT 1",[before.id,event.source.kind,event.source.occurredAt]);
     if(newer.rowCount)throw new IntegrationError(409,"older_source","该岗位已有更新的同类来源消息，请用 notify 留待核对");
     guardStatus(before,event.patch.status);
+    // Only status given: follow the editor's linkage so closed stages drop the stale action (#23).
+    const patch=event.patch.status!==undefined&&event.patch.nextAction===undefined?{...event.patch,nextAction:defaultNextAction(event.patch.status)}:event.patch;
     const appointments=event.appointment?[...before.appointments.filter(item=>item.id!==event.appointment!.id),event.appointment]:before.appointments;
     const notes=event.note?`${before.notes}${before.notes?"\n\n":""}[${actor.name} · ${event.source.occurredAt}] ${event.note}`:before.notes;
-    entry=validateJob({...before,...event.patch,appointments,notes,revision:before.revision+1,...(event.patch.jd!==undefined&&event.patch.jd!==before.jd?{jdStatus:event.patch.jd||event.patch.summary||before.summary?"partial":"missing"}:{})});
+    entry=validateJob({...before,...patch,appointments,notes,revision:before.revision+1,...(event.patch.jd!==undefined&&event.patch.jd!==before.jd?{jdStatus:event.patch.jd||event.patch.summary||before.summary?"partial":"missing"}:{})});
     if(event.patch.jd!==undefined&&event.patch.jd!==before.jd){entry.jdStatus=entry.jd?"partial":entry.summary?"partial":"missing";entry.jdSavedAt=entry.jd?now:"";await client.query("INSERT INTO versions(id,entry_id,data,created) VALUES($1,$2,$3,$4)",[randomUUID(),entry.id,JSON.stringify({jd:before.jd,jdStatus:before.jdStatus,jdSavedAt:before.jdSavedAt,summary:before.summary,url:before.url}),now]);}
     if(!changedFields(before,entry).length)throw new IntegrationError(400,"no_changes","未产生变更，可使用 notify 记录消息");
     await client.query("UPDATE entries SET data=$1,revision=$2,updated=$3 WHERE id=$4",[JSON.stringify(entry),entry.revision,now,entry.id]);
