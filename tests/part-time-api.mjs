@@ -1,11 +1,17 @@
 // Run only inside the isolated test app. Never pointed at production.
 import assert from 'node:assert/strict';
-import { createHmac, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 assert.equal(process.env.SCHEDULER, 'off');
 assert.equal(new URL(process.env.DATABASE_URL).hostname, 'runway-parttime-test-db');
-const p=Buffer.from(JSON.stringify({sub:'owner',exp:Math.floor(Date.now()/1000)+120,ver:0})).toString('base64url');
-const cookie='opportunity_session='+p+'.'+createHmac('sha256',process.env.SESSION_SECRET).update(p).digest('base64url');
 const base='http://127.0.0.1:3000';
+// Register a throwaway account and use its real database session; the old forged
+// HMAC cookie no longer authenticates (#30).
+async function signIn() {
+  const response=await fetch(base+'/api/auth',{method:'POST',headers:{origin:process.env.APP_ORIGIN,'Content-Type':'application/json'},body:JSON.stringify({action:'register',email:`parttime-${randomUUID()}@example.test`,password:'Runway-test-'+randomUUID()+'!',displayName:'Part-time test'})});
+  assert.equal(response.status,200,'register failed: '+await response.text());
+  return response.headers.get('set-cookie').split(';')[0];
+}
+const cookie=await signIn();
 async function call(item, options={}) {
   const r=await fetch(base+'/api/part-time'+(options.restore?'?restore=1':''),{method:item?'POST':'GET',headers:{...(options.auth===false?{}:{cookie}),origin:options.origin??process.env.APP_ORIGIN,...(item?{'Content-Type':'application/json'}:{})},body:item?JSON.stringify(item):undefined});
   return {status:r.status,body:await r.json()};
