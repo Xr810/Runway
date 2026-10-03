@@ -75,7 +75,7 @@ async function classify(name: string, website: string, signal: AbortSignal) {
   return companyTypes.includes(result.companyType) && result.companyType !== "待核实" && result.confidence !== "low" ? result : null;
 }
 
-type Run = { id: string; status: "running" | "completed" | "failed"; error?: string; updated?: number };
+type Run = { id: string; status: "running" | "completed" | "no_updates" | "failed"; error?: string; updated?: number };
 const running = new Map<string, Promise<{ updated: number }>>(), runs = new Map<string, Run>();
 export const completionRunning = async () => running.has(await currentUserId());
 /**
@@ -163,9 +163,9 @@ export async function completeCompanies(options: { names?: string[]; force?: boo
           if(incomplete.length)throw Error(`以下公司仍未补全官网或官方图标：${incomplete.join("、")}。请查看公司资料补全记录中的失败原因后重试。`);
         }
     if (done.length) { await syncEnrichment(); await notify({ actor: "Runway AI", action: "company", summary: `补全了 ${done.length} 家公司的资料`, title: "公司资料补全", changes: [{ field: "companies", before: null, after: done.join("\n") }] }); }
-    if (failed) throw Error(`${failed} 家公司的资料补全失败，将稍后重试`);
+    if (failed) throw Error(`${failed} 家公司的资料补全失败${done.length ? `，已补全 ${done.length} 家` : ""}，将稍后重试`);
     return { updated: done.length };
-  }).then(result => { const run = runs.get(userId); if (run) runs.set(userId, { ...run, status: "completed", updated: result.updated }); return result; }, error => { const run = runs.get(userId); if (run) runs.set(userId, { ...run, status: "failed", error: (error as Error).message }); throw error; }).finally(() => { running.delete(userId); });
+  }).then(result => { const run = runs.get(userId); if (run) runs.set(userId, { ...run, status: result.updated ? "completed" : "no_updates", updated: result.updated }); return result; }, error => { const run = runs.get(userId); if (run) runs.set(userId, { ...run, status: "failed", error: (error as Error).message }); throw error; }).finally(() => { running.delete(userId); });
   running.set(userId, promise);
   return promise;
 }

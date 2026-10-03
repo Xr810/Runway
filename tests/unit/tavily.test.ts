@@ -43,3 +43,10 @@ test("irrelevant search-engine explainers are discarded", async () => {
     assert.deepEqual(results.map(result => result.title), ["M-Labs"]);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+test("ordinary in-product searches stay local until web search is explicit", () => {
+  assert.equal(shouldSearchWeb("搜索后端岗位"), false);
+  assert.equal(shouldSearchWeb("列出我的岗位"), false);
+  assert.equal(shouldSearchWeb("查看今天的提醒"), false);
+  assert.equal(shouldSearchWeb("联网搜索后端岗位"), true);
+});
