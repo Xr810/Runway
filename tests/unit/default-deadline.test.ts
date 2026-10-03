@@ -1,6 +1,11 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {blankEntry,defaultJobDeadline,defaultNextAction,normalizeLegacyNextAction} from "../../lib/model";
+import {blankEntry,defaultJobDeadline,defaultNextAction,normalizeLegacyNextAction,validCalendarDate} from "../../lib/model";
+
+test("only real calendar dates pass validation",()=>{
+ for(const value of ["2026-02-28","2026-12-31","2000-02-29"]) assert(validCalendarDate(value),value);
+ for(const value of ["2026-13-01","2026-02-30","2026-04-31","2026-2-3","","2026-13-40","not-a-date"]) assert(!validCalendarDate(value),value);
+});
 
 test("unknown job deadlines stay unknown instead of being invented",()=>{
  const job={...blankEntry("job"),nextAction:"2026-09-28 收到的笔记（无明确截止日期）"};

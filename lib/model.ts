@@ -16,11 +16,13 @@ export const schedules = ["待核实","全职 Full-time","兼职 Part-time"];
 export const companyTypes = ["待核实","外企","中国内地企业","港澳台企业"];
 const option=(values:string[])=>z.string().refine(v=>values.includes(v),"无效的岗位属性").default("待核实");
 const short = z.string().max(2000).default("");
-const date = z.string().refine(v=>!v || /^\d{4}-\d{2}-\d{2}$/.test(v)&&!Number.isNaN(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v,"日期格式无效").default("");
+/** True only for a real `YYYY-MM-DD` calendar date; rejects rollovers such as 2026-02-30. */
+export function validCalendarDate(value:string){return /^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(Date.parse(value))&&new Date(value).toISOString().slice(0,10)===value}
+const date = z.string().refine(v=>!v || validCalendarDate(v),"日期格式无效").default("");
 const url = z.string().max(4000).refine(v=>!v || /^https?:\/\//i.test(v)&&URL.canParse(v),"链接需要以 https:// 或 http:// 开头").default("");
 export const progressSchema=z.object({
  id:z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
- date:z.string().refine(v=>/^\d{4}-\d{2}-\d{2}$/.test(v)&&!Number.isNaN(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v&&v<=today(),"进度日期需为今天或过去的有效日期"),
+ date:z.string().refine(v=>validCalendarDate(v)&&v<=today(),"进度日期需为今天或过去的有效日期"),
  text:z.string().trim().min(1,"请写下本次进度").max(2000),
  minutes:z.number().int().min(0).max(1440).default(0),track:z.string().trim().max(120).default(""),
  milestone:z.boolean().default(false),
