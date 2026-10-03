@@ -8,7 +8,7 @@ import { isApplied, timelineEvents } from "@/lib/journey";
 import { Button } from "@/components/ui/button";
 import { useDesk, readJson, postJson } from "../store";
 import { TodayReminders } from "../reminders";
-import { CompanyMark, EmptyState, Panel, Pill, Stat, formatDay, relativeDay, stamp, type Tone } from "../ui";
+import { CompanyMark, EmptyState, Panel, Pill, Stat, formatDay, kindCopy, relativeDay, stamp, type Tone } from "../ui";
 import ProgressDialog, { newProgress, type ProgressDraft } from "../progress-dialog";
 import { KindIcon, lastActivity } from "./projects";
 import { recruitingReminders } from "@/lib/recruiting-reminders";
@@ -54,7 +54,7 @@ export default function TodayView() {
           </div>
           <ul className="flex flex-col py-1.5">{events.filter(e => e.date === date).map(ev => <li key={ev.id}><button onClick={() => openEntry(ev.entry.id)} className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-muted/50">
             <Pill tone={eventTone[ev.type] ?? "gray"} className="hidden w-[68px] justify-center sm:inline-flex">{ev.label.replace(" / ", "/")}</Pill>
-            <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{ev.entry.title}</p><p className="truncate text-xs text-muted-foreground"><span className="sm:hidden">{ev.label} · </span>{ev.time && <span className="tabular font-medium text-foreground">{ev.time} · </span>}{ev.detail || ev.entry.organization || (ev.entry.kind === "project" ? "个人项目" : "比赛")}</p></div>
+            <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{ev.entry.title}</p><p className="truncate text-xs text-muted-foreground"><span className="sm:hidden">{ev.label} · </span>{ev.time && <span className="tabular font-medium text-foreground">{ev.time} · </span>}{ev.detail || ev.entry.organization || kindCopy[ev.entry.kind].orgEmpty}</p></div>
           </button></li>)}</ul>
         </li>)}</ol>
           : <EmptyState icon={<CalendarCheck2 />} title="未来两周没有安排" description="给岗位或比赛设置截止、跟进日期后，会显示在这里。" className="m-4 border-0" />}

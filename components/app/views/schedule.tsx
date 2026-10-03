@@ -6,7 +6,7 @@ import { closed, dayDiff, today } from "@/lib/model";
 import { timelineEvents } from "@/lib/journey";
 import { Switch } from "@/components/ui/switch";
 import { useDesk } from "../store";
-import { CompanyMark, EmptyState, PageHeader, Pill, Segmented, relativeDay } from "../ui";
+import { CompanyMark, EmptyState, PageHeader, Pill, Segmented, kindCopy, relativeDay } from "../ui";
 import { eventTone } from "./today";
 
 const weekday = new Intl.DateTimeFormat("zh-CN", { timeZone: "UTC", weekday: "short" });
@@ -37,7 +37,7 @@ export default function ScheduleView() {
         <ul className="flex flex-col py-1">{inMonth.filter(e => e.date === date).map(ev => <li key={ev.id}><button onClick={() => openEntry(ev.entry.id)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/50">
           <CompanyMark name={ev.entry.organization || ev.entry.title} src={ev.entry.kind === "job" ? logoFor(ev.entry.organization) : undefined} size="sm" />
           <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{ev.entry.title}</p>
-            <p className="truncate text-xs text-muted-foreground">{ev.time && <span className="tabular font-medium text-foreground">{ev.time} · </span>}{ev.detail || `${ev.entry.organization || (ev.entry.kind === "project" ? "个人项目" : "比赛")} · ${ev.entry.nextAction || ev.entry.status}`}</p></div>
+            <p className="truncate text-xs text-muted-foreground">{ev.time && <span className="tabular font-medium text-foreground">{ev.time} · </span>}{ev.detail || `${ev.entry.organization || kindCopy[ev.entry.kind].orgEmpty} · ${ev.entry.nextAction || ev.entry.status}`}</p></div>
           <Pill tone={eventTone[ev.type] ?? "gray"}>{ev.label}</Pill>
         </button></li>)}</ul>
       </li>; })}</ol>
