@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { appointmentSchema, stageProgress } from "../../lib/appointments";
+import { appointmentSchema, normalizeStageStates, stageProgress } from "../../lib/appointments";
 import { blankEntry, entrySchema } from "../../lib/model";
 import { defaultReminderPreferences, recruitingReminders } from "../../lib/recruiting-reminders";
 import { timelineEvents } from "../../lib/journey";
@@ -71,6 +71,15 @@ test("current round is explicit, not inferred from dates, and cancelled rounds c
   assert.deepEqual(recruitingReminders([entry]), []);
 });
 
+test("legacy records with several current stages stay readable, newest stays active", () => {
+  const first = stage({ id: "round-1", status: "completed", completedAt: "2026-09-11T02:00:00Z" });
+  const second = stage({ id: "round-2", startsAt: "2026-09-20T02:00:00Z" });
+  const normalized = normalizeStageStates([first, second]);
+  assert.equal(normalized[0].stageState, "superseded");
+  assert.equal(normalized[1].stageState, "current");
+  assert.equal(normalizeStageStates([{ ...first, stageState: "superseded" }, second]).length, 2);
+  assert.deepEqual(normalizeStageStates([second]), [second]);
+});
 test("progress uses separate pending and feedback intervals without inventing unknown dates", () => {
   const item = stage({ type: "assessment", startsAt: "", receivedDate: "2026-09-10", deadlineDate: "2026-09-15" });
   assert.equal(stageProgress(item, "2026-09-12").percent, 40);

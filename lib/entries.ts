@@ -2,11 +2,12 @@ import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { pool, tx, type Db } from "./postgres";
 import { defaultJobDeadline, defaultNextAction, normalizeLegacyNextAction, entryObject, entrySchema, type Entry } from "./model";
+import { normalizeStageStates } from "./appointments";
 
 export class EntryError extends Error { constructor(public status: number, message: string) { super(message); } }
 type Row = { data: Entry; revision: number; updated: string };
 const parse = (row: Row) => {
-  const entry=entrySchema.parse({ ...row.data, revision: row.revision });
+  const entry=entrySchema.parse({ ...row.data, appointments: normalizeStageStates(row.data.appointments ?? []), revision: row.revision });
   if(entry.kind==="job"){
     const oldNext=entry.nextAction,normalized=normalizeLegacyNextAction(entry.status,oldNext);
     if(normalized){entry.nextAction=normalized;if(!entry.deadline)entry.deadline=defaultJobDeadline({...entry,nextAction:oldNext});}
@@ -60,7 +61,7 @@ async function write(client: PoolClient, next: Entry, previous: Entry | null, no
 
 /** Full save with an optimistic revision check. `restore` never overwrites an existing record. */
 export async function saveEntry(input: unknown, mode: "save" | "restore" = "save") {
-  const parsed = entrySchema.safeParse(input); if (!parsed.success) throw new EntryError(400, parsed.error.issues[0].message);
+  const parsed = entrySchema.safeParse({ ...(input as Record<string, unknown>), appointments: normalizeStageStates((input as Partial<Entry>)?.appointments ?? []) }); if (!parsed.success) throw new EntryError(400, parsed.error.issues[0].message);
   const entry = parsed.data;
   if (mode === "save" && !entry.revision && entry.kind === "job") {
     const originalNext=entry.nextAction;
@@ -90,6 +91,7 @@ export async function patchEntry(id: string, revision: number, patch: Record<str
     const previous = parse(row);
     if (previous.revision !== revision) throw new EntryError(409, "记录已更新，请重新加载");
     const normalized={...previous,...patch};
+    if (normalized.appointments) normalized.appointments = normalizeStageStates(normalized.appointments);
     if (normalized.kind === "job" && patch.status !== undefined && patch.nextAction === undefined) normalized.nextAction=defaultNextAction(String(patch.status));
     const originalNext=normalized.nextAction,legacyNext=normalizeLegacyNextAction(normalized.status,originalNext);
     if (legacyNext) { normalized.nextAction=legacyNext; if (!normalized.deadline) normalized.deadline=defaultJobDeadline({...normalized,nextAction:originalNext}); }

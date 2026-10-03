@@ -30,6 +30,15 @@ export const appointmentSchema = z.object({
 });
 export type Appointment = z.infer<typeof appointmentSchema>;
 
+/** Older records predate `stageState`, so every stage defaults to `current` and the
+ * entry schema rejects the whole record. Keep only the newest stage active (#26). */
+export function normalizeStageStates(items: Appointment[]): Appointment[] {
+  const current = items.filter(item => item.type !== "followup" && item.stageState === "current");
+  if (current.length <= 1) return items;
+  const keep = current[current.length - 1].id;
+  return items.map(item => item.stageState === "current" && item.id !== keep ? { ...item, stageState: "superseded" as const } : item);
+}
+
 export const appointmentDate = (value: string) => value ? new Intl.DateTimeFormat("en-CA", { timeZone: RECRUITING_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value)) : "";
 export const appointmentTime = (value: string) => value ? new Intl.DateTimeFormat("zh-CN", { timeZone: RECRUITING_TIME_ZONE, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value)) : "";
 export function addCalendarDays(date: string, days: number) { const value = new Date(date + "T00:00:00Z"); value.setUTCDate(value.getUTCDate() + days); return value.toISOString().slice(0, 10); }
