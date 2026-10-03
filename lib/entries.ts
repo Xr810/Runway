@@ -27,6 +27,11 @@ export async function getEntry(id: string, db: Db = pool): Promise<Entry | null>
   const row = (await db.query<Row>("SELECT data, revision, updated FROM entries WHERE id=$1 AND deleted_at IS NULL", [id])).rows[0];
   return row ? parse(row) : null;
 }
+/** One history version by its own ID, body included, for agent detail reads (#17). */
+export async function getVersion(id: string) {
+  const row = (await pool.query<{ id: string; entry_id: string; data: unknown; created: string }>("SELECT id, entry_id, data, created FROM versions WHERE id=$1", [id])).rows[0];
+  return row ? { ...row, data: JSON.stringify(row.data) } : null;
+}
 export async function listDeleted() {
   const rows = await pool.query<Row & { deleted_at: string }>("SELECT data, revision, updated, deleted_at FROM entries WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT 200");
   return rows.rows.map(row => ({ ...parse(row), deletedAt: row.deleted_at }));
@@ -37,6 +42,9 @@ const historyFields = (e: Entry) => ({ jd: e.jd, jdStatus: e.jdStatus, jdSavedAt
 async function write(client: PoolClient, next: Entry, previous: Entry | null, now: string) {
   if (next.jdStatus === "missing" && (next.jd || next.summary)) next.jdStatus = "partial";
   const textChanged = !previous || previous.jd !== next.jd || previous.jdStatus !== next.jdStatus;
+  // Summary and original-link edits are content too; snapshot them so the previous
+  // text is not silently lost (#8).
+  const contentChanged = textChanged || (previous !== null && (previous.summary !== next.summary || previous.url !== next.url));
   next.jdSavedAt = next.jd && textChanged ? now : previous?.jdSavedAt ?? next.jdSavedAt;
   next.revision = (previous?.revision ?? 0) + 1;
   if (!previous) {
@@ -44,7 +52,7 @@ async function write(client: PoolClient, next: Entry, previous: Entry | null, no
     if (inserted.rowCount !== 1) throw new EntryError(409, "记录已存在，请重新加载");
     return next;
   }
-  if (textChanged) await client.query("INSERT INTO versions(id,entry_id,data,created) VALUES($1,$2,$3,$4)", [randomUUID(), next.id, JSON.stringify(historyFields(previous)), now]);
+  if (contentChanged) await client.query("INSERT INTO versions(id,entry_id,data,created) VALUES($1,$2,$3,$4)", [randomUUID(), next.id, JSON.stringify(historyFields(previous)), now]);
   const updated = await client.query("UPDATE entries SET data=$1, revision=$2, updated=$3 WHERE id=$4 AND revision=$5 AND deleted_at IS NULL", [JSON.stringify(next), next.revision, now, next.id, previous.revision]);
   if (updated.rowCount !== 1) throw new EntryError(409, "保存冲突，请重新加载");
   return next;
