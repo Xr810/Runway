@@ -1,5 +1,6 @@
 import type { AiReply } from "./ai-contract";
 import { prepareAgentActions, type AgentSnapshot } from "./agent-contract";
+import { draftCommand } from "./agent-commands";
 
 export function requestsCompanyLogoCompletion(text: string) {
   return /(?:图标|logo|徽标|标志)/i.test(text)
@@ -38,6 +39,6 @@ export function routeCompanyLogoCompletion(reply: AiReply, snapshot: AgentSnapsh
   return {
     ...reply,
     reply: names.length ? `我会检查并更新${names.join("、")}的公司资料${logoIntent ? "和官方图标" : ""}，确认后开始。` : `我会检查公司目录，补全缺失的官网与官方图标；如果你要替换现有图标，请在请求中注明公司名称。确认后开始。`,
-    actions: [...(reply.actions ?? []).filter(item => item.path !== "/api/companies/complete"), ...action],
+    actions: [...(reply.actions ?? []).filter(item => draftCommand(item) !== "companyCompletion"), ...action],
   };
 }

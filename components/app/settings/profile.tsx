@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { useDesk, readJson, postJson } from "../store";
+import { readJson, postJson } from "../store";
+import { useAssistantPanel } from "../assistant-panel-context";
+import { useNavigationGuard } from "../navigation-guard-context";
 import { enrichmentRequest } from "../evaluation";
 import { Panel, stamp } from "../ui";
 
@@ -20,7 +22,8 @@ const fields = [
 const suggestions = ["量化研究", "量化交易", "数据科学", "机器学习", "软件工程", "产品经理", "投资银行", "咨询"];
 
 export default function ProfileSettings() {
-  const { setGuard, askAssistant } = useDesk();
+  const { askAssistant } = useAssistantPanel();
+  const { setGuard } = useNavigationGuard();
   const [profile, setProfile] = useState<EvaluationProfile | null>(null), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [uploading, setUploading] = useState(false), [error, setError] = useState(""), [target, setTarget] = useState(""), [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const load = async () => { try { setProfile((await enrichmentRequest()).profile); setDirty(false); } catch (e) { setError((e as Error).message); } };

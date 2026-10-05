@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadio
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDesk } from "../store";
+import { useAssistantPanel } from "../assistant-panel-context";
 import { CompanyMark, DueLabel, EmptyState, PageHeader, ScoreValue, Segmented, StatusBadge, jobStages, solidTones, stageOf, type Tone, type StageKey } from "../ui";
 import { jdLabel } from "../entry-detail";
 import { useEnrichment } from "../evaluation";
@@ -42,7 +43,8 @@ function subscribeLayout(listener: () => void) { layoutListeners.add(listener); 
 function writeLayout(value: "list" | "board") { try { localStorage.setItem("runway.jobs.layout", value); } catch { /* preference only */ } layoutListeners.forEach(l => l()); }
 
 export default function JobsView() {
-  const { data, loading, error, reload, openEntry, newEntry, logoFor, aiFilter, applyAiFilter } = useDesk();
+  const { data, loading, error, reload, openEntry, newEntry, logoFor } = useDesk();
+  const { aiFilter, applyAiFilter } = useAssistantPanel();
   // The composite score must use the same custom weights as 洞察 (#6).
   const { feed } = useEnrichment();
   const weights = feed?.profile.evaluationWeights;

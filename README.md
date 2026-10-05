@@ -65,3 +65,52 @@ npm run build
 API and database integration tests require a disposable test database and may create or
 delete fixture records. Never run them against production. See [SECURITY.md](SECURITY.md)
 for deployment boundaries and private vulnerability reporting.
+
+## Maintaining the frontend and assistant
+
+Format the files you change with `npm run format -- <paths>` and check them with
+`npm run format:check -- <paths>`. Prettier is development-only; avoid repository-wide
+formatting in a behavior change. The existing vendored UI components remain unchanged.
+
+- `useDesk` owns records, editing/selection, evaluation and logos. `useAssistantPanel`,
+  `useNotifications`, `useReminders`, and `useNavigationGuard` own separate contexts.
+  Subscribe only to the contexts a component uses. Keep their providers under the account-keyed
+  `DeskProvider`; moving one above it could retain another account's state.
+- `assistant.tsx` renders the UI; `use-assistant-conversation.ts` owns the request/cache/polling
+  lifecycle. Image conversion and IndexedDB access have separate modules. Keep polling bounded
+  and stop tracking completed runs unless a background result remains queued.
+- `agent-runtime.ts` owns durable runs and checkpoint recovery. Its lazily loaded
+  `agent-planner.ts` accepts a validated request and returns proposals; it does not execute them.
+  `ai-provider.ts` owns the model protocol. LangGraph remains the workflow engine, not the
+  business interface. Replacing an SDK does not require changing domain writers or UI contexts.
+- New proposals use `AgentCommand`, not HTTP paths. Add a model action to `agent-contract.ts`,
+  map its module in `agent-capabilities.ts`, and handle its command in `agent-executor.ts`
+  (or `agent-jobs.ts` for background work). Exhaustive dispatch and boundary tests catch missing
+  handlers/mappings. Reuse the domain writers used by ordinary APIs. `agent-commands.ts` contains
+  the read adapter for old checkpoint/browser-cache paths; do not remove it while those can exist.
+- History lists contain metadata. Full historical bodies load only for an explicit version read
+  or a restore proposal, bounded by the validated action count. Other business snapshots are still
+  request-scoped, not global caches. No extra database pool, worker or MCP process is started.
+- `agent-policy.ts` is the server-owned permission boundary. Today it uses account `ai_enabled`
+  and personal/managed configuration, including forbidding model changes in managed mode.
+  Capabilities are filtered for the model/UI, and grants are checked again before execution and
+  before a queued job starts. Future administrator grants/plan entitlements belong in this resolver,
+  not browser state or prompts. There is **no admin panel, subscription system or billing ledger yet**.
+  Add authoritative usage accounting and quota reservation before offering paid AI usage; the
+  current hourly request limit is not a token/cost budget.
+
+### Future Gmail MCP integration
+
+No external MCP client or Gmail connection is installed yet. Start with a server-side, user-scoped
+read adapter behind planning (`search`/`read`), with explicit tools and OAuth scopes. Keep credentials
+encrypted outside prompts/checkpoints, limit retrieved text/attachments, and treat email bodies as
+untrusted data. An MCP server's read-only annotation is not an authorization decision. Do not expose
+arbitrary MCP URLs or launch commands to users without endpoint and deployment controls.
+
+Sending, forwarding or deleting mail needs a separate, explicitly granted command, confirmation of
+the exact recipients/content, and a durable external-operation job. Never send mail inside
+`atomicAgentWrite`: serializable database retries can repeat external side effects. Commit intent
+first, invoke the provider outside the transaction, and reconcile uncertain results before retrying.
+Use provider idempotency where supported; a timeout is not proof that sending failed. Check live
+permissions again at dispatch. LangGraph can retain confirmation/recovery while an MCP adapter or
+OpenAI SDK handles transport; switching the workflow engine is not a prerequisite.

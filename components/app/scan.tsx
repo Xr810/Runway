@@ -7,6 +7,7 @@ import { RECRUITING_TIME_ZONE } from "@/lib/appointments";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useDesk, readJson, postJson } from "./store";
+import { useNotifications } from "./notifications-context";
 import { scanBrands } from "./evaluation";
 import { relativeDay, stamp } from "./ui";
 
@@ -16,7 +17,8 @@ type Overview = { settings: ScanSettings; running: boolean; configured: boolean;
 
 /** Scan status for all watches; polls while a scan is running. */
 export function useScan(withHistory = false) {
-  const { reload, refreshNotifications } = useDesk();
+  const { reload } = useDesk();
+  const { refreshNotifications } = useNotifications();
   const [overview, setOverview] = useState<Overview | null>(null), [starting, setStarting] = useState(false);
   const load = useCallback(async () => { try { setOverview(await readJson<Overview>(await fetch("/api/scan" + (withHistory ? "?history" : ""), { cache: "no-store" }))); } catch { /* shown as unavailable */ } }, [withHistory]);
   useEffect(() => { void Promise.resolve().then(load); }, [load]);

@@ -13,6 +13,8 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useDesk, postJson } from "./store";
+import { useAssistantPanel } from "./assistant-panel-context";
+import { useReminders } from "./reminders-context";
 import { Panel, Pill, Segmented } from "./ui";
 
 const nowClock = () => new Intl.DateTimeFormat("en-GB", { timeZone: RECRUITING_TIME_ZONE, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
@@ -20,7 +22,9 @@ const weekdays = [[1, "一"], [2, "二"], [3, "三"], [4, "四"], [5, "五"], [6
 const blank = (): Reminder => ({ id: crypto.randomUUID(), title: "", note: "", url: "", schedule: { type: "daily", time: "08:00", until: "" }, active: true, entryId: null, source: "user", revision: 0 });
 
 export function TodayReminders() {
-  const { reminders, reloadReminders, openEntry, askAssistant } = useDesk();
+  const { openEntry } = useDesk();
+  const { askAssistant } = useAssistantPanel();
+  const { reminders, reloadReminders } = useReminders();
   const [managing, setManaging] = useState(false), [editing, setEditing] = useState<Reminder | null>(null), [busy, setBusy] = useState<string | null>(null);
   const clock = nowClock();
   async function toggle(id: string, done: boolean) {
@@ -50,7 +54,7 @@ export function TodayReminders() {
 }
 
 function ReminderManager({ open, onOpenChange, onEdit }: { open: boolean; onOpenChange: (open: boolean) => void; onEdit: (r: Reminder) => void }) {
-  const { reminders, reloadReminders } = useDesk();
+  const { reminders, reloadReminders } = useReminders();
   const [busy, setBusy] = useState(false);
   async function save(r: Reminder) { setBusy(true); try { await postJson("/api/reminders", { action: "save", reminder: r }); await reloadReminders(); } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); } }
   async function remove(r: Reminder) { if (!window.confirm(`删除提醒「${r.title}」？`)) return; setBusy(true); try { await postJson("/api/reminders", { action: "delete", id: r.id }); await reloadReminders(); toast.success("已删除"); } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); } }
@@ -84,7 +88,7 @@ function RepeatControl({ schedule: s, onChange }: { schedule: Schedule; onChange
 }
 
 export function ReminderEditor({ value, onChange }: { value: Reminder | null; onChange: (value: Reminder | null) => void }) {
-  const { reloadReminders } = useDesk();
+  const { reloadReminders } = useReminders();
   const [busy, setBusy] = useState(false);
   const set = (patch: Partial<Reminder>) => value && onChange({ ...value, ...patch });
   const setSchedule = (schedule: Schedule) => set({ schedule });

@@ -2,7 +2,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Bell, DatabaseBackup, Plug, Sparkles, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useDesk } from "../store";
+import { useNavigationGuard } from "../navigation-guard-context";
 import { PageHeader } from "../ui";
 import AiSettings from "../settings/ai";
 import ProfileSettings from "../settings/profile";
@@ -20,7 +20,7 @@ const sections = [
 type Section = (typeof sections)[number]["key"];
 
 export default function SettingsView() {
-  const params = useSearchParams(), router = useRouter(), { confirmLeave } = useDesk();
+  const params = useSearchParams(), router = useRouter(), { confirmLeave } = useNavigationGuard();
   const current = (sections.find(s => s.key === params.get("section"))?.key ?? "ai") as Section;
   const go = (key: Section) => { if (key !== current && confirmLeave()) router.replace("/settings?section=" + key, { scroll: false }); };
   return <>

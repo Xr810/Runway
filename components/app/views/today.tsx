@@ -7,6 +7,8 @@ import { type Entry, closed, dayDiff, today } from "@/lib/model";
 import { isApplied, timelineEvents } from "@/lib/journey";
 import { Button } from "@/components/ui/button";
 import { useDesk, readJson, postJson } from "../store";
+import { useAssistantPanel } from "../assistant-panel-context";
+import { useNotifications } from "../notifications-context";
 import { TodayReminders } from "../reminders";
 import { CompanyMark, EmptyState, Panel, Pill, Stat, formatDay, kindCopy, relativeDay, stamp, type Tone } from "../ui";
 import ProgressDialog, { newProgress, type ProgressDraft } from "../progress-dialog";
@@ -19,7 +21,8 @@ function greeting() { const h = Number(new Intl.DateTimeFormat("en-GB", { timeZo
 const inStages = (e: Entry, statuses: string[]) => statuses.includes(e.status);
 
 export default function TodayView() {
-  const { data, loading, openEntry, newEntry, logoFor, notifications, setNotificationsOpen } = useDesk();
+  const { data, loading, openEntry, newEntry, logoFor } = useDesk();
+  const { notifications, setNotificationsOpen } = useNotifications();
   const [progress, setProgress] = useState<ProgressDraft | null>(null);
   const reminderPreferences = data.reminderPreferences;
   const open = data.entries.filter(e => !closed(e)), jobs = open.filter(e => e.kind === "job");
@@ -99,7 +102,8 @@ export default function TodayView() {
 type Brief = { headline: string; items: { text: string; entryId: string | null; priority: "high" | "normal" }[]; created: string };
 /** AI plan for the day, plus a box to hand anything to the assistant. */
 function DailyBrief() {
-  const { openEntry, askAssistant, data, loading, newEntry } = useDesk();
+  const { openEntry, data, loading, newEntry } = useDesk();
+  const { askAssistant } = useAssistantPanel();
   // An empty workspace has nothing to plan; show getting-started steps instead of a generic brief.
   const empty = !loading && !data.entries.length;
   const [brief, setBrief] = useState<Brief | null>(null), [configured, setConfigured] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState(""), [ask, setAsk] = useState("");

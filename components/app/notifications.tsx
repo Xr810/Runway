@@ -5,7 +5,8 @@ import { cn } from "@/lib/utils";
 import { appointmentDate, appointmentTime } from "@/lib/appointments";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { useDesk, readJson, postJson, type NoticeFeed } from "./store";
+import { useDesk, readJson, postJson } from "./store";
+import { useNotifications, type NoticeFeed } from "./notifications-context";
 import { EmptyState, Pill, Segmented, stamp, type Tone } from "./ui";
 
 const labels: Record<string, string> = { evaluation: "评估分数", logo: "官方图标", status: "状态", title: "岗位", organization: "公司", appointments: "面试 / 笔试", nextAction: "下一步", deadline: "截止日期", followUp: "跟进日期", applied: "投递日期", notes: "备注", url: "岗位链接", jd: "JD 原文", summary: "摘要", applicationChannel: "投递渠道", applicationUrl: "投递链接", location: "工作地点", salary: "薪资", workMode: "工作模式", employmentType: "岗位类型", schedule: "工作时间", companyType: "公司类型", companyBasis: "分类依据", companySource: "分类来源", priority: "优先级", jdStatus: "原文完整度" };
@@ -18,7 +19,8 @@ function display(value: unknown) {
 }
 
 export default function NotificationsSheet() {
-  const { notificationsOpen: open, setNotificationsOpen, refreshNotifications, openEntry } = useDesk();
+  const { openEntry } = useDesk();
+  const { notificationsOpen: open, setNotificationsOpen, refreshNotifications } = useNotifications();
   const [view, setView] = useState<"inbox" | "history">("inbox"), [feed, setFeed] = useState<NoticeFeed>({ items: [], unread: 0, latest: "0", nextBefore: null }), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
     try { setFeed(await readJson<NoticeFeed>(await fetch("/api/notifications?history=" + (view === "history"), { cache: "no-store" }))); setError(""); } catch (e) { setError((e as Error).message); }

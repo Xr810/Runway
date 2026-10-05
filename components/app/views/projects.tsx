@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useDesk } from "../store";
+import { useAssistantPanel } from "../assistant-panel-context";
 import { EmptyState, PageHeader, Pill, Segmented, StatusBadge, formatDay, relativeDay } from "../ui";
 import ProgressDialog, { newProgress, type ProgressDraft } from "../progress-dialog";
 
@@ -26,7 +27,8 @@ export function KindIcon({ kind, className }: { kind: Entry["kind"]; className?:
 }
 
 export default function ProjectsView() {
-  const { data, newEntry, aiFilter, applyAiFilter } = useDesk();
+  const { data, newEntry } = useDesk();
+  const { aiFilter, applyAiFilter } = useAssistantPanel();
   const params = useSearchParams();
   const thisYear = Number(today().slice(0, 4));
   const [kind, setKind] = useState<"all" | "project" | "competition">(() => { const k = params.get("kind"); return k === "project" || k === "competition" ? k : "all"; });

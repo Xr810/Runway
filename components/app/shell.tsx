@@ -10,6 +10,9 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Kbd } from "@/components/ui/kbd";
 import { useDesk } from "./store";
+import { useAssistantPanel } from "./assistant-panel-context";
+import { useNotifications } from "./notifications-context";
+import { useNavigationGuard } from "./navigation-guard-context";
 import { Logo } from "./logo";
 import EntryDetail from "./entry-detail";
 import EntryEditor from "./entry-editor";
@@ -29,7 +32,10 @@ const nav = [
 
 function NavContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname(), router = useRouter();
-  const { data, notifications, setNotificationsOpen, assistantOpen, setAssistantOpen, confirmLeave } = useDesk();
+  const { data } = useDesk();
+  const { assistantOpen, setAssistantOpen } = useAssistantPanel();
+  const { notifications, setNotificationsOpen } = useNotifications();
+  const { confirmLeave } = useNavigationGuard();
   const active = (href: string) => href === "/" ? pathname === "/" : pathname.startsWith(href);
   const item = "flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground [&_svg]:size-4 [&_svg]:shrink-0";
   async function logout() {
@@ -63,7 +69,9 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export default function Shell({ children, userId }: { children: ReactNode; userId: string }) {
-  const { setAssistantOpen, assistantOpen, notifications, setNotificationsOpen, guard } = useDesk();
+  const { setAssistantOpen, assistantOpen } = useAssistantPanel();
+  const { notifications, setNotificationsOpen } = useNotifications();
+  const { guard } = useNavigationGuard();
   const [menu, setMenu] = useState(false);
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") { e.preventDefault(); setAssistantOpen(!assistantOpen); } };

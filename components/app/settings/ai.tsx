@@ -4,13 +4,14 @@ import { Check, KeyRound, LoaderCircle, RefreshCw, Save, Wifi } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useDesk, readJson } from "../store";
+import { readJson } from "../store";
+import { useNavigationGuard } from "../navigation-guard-context";
 import { Panel, Pill } from "../ui";
 
 type Config = { base: string; model: string; hasKey: boolean; hasTavilyKey: boolean; revision: number; source: string; configured: boolean; mode: "personal" | "managed"; enabled: boolean; editable: boolean };
 
 export default function AiSettings() {
-  const { setGuard } = useDesk();
+  const { setGuard } = useNavigationGuard();
   const [saved, setSaved] = useState<Config | null>(null), [base, setBase] = useState(""), [apiKey, setKey] = useState(""), [tavilyApiKey, setTavilyKey] = useState(""), [model, setModel] = useState("");
   const [models, setModels] = useState<string[]>([]), [search, setSearch] = useState(""), [busy, setBusy] = useState("load"), [error, setError] = useState(""), [notice, setNotice] = useState(""), [editingKey, setEditingKey] = useState(false), [editingTavilyKey, setEditingTavilyKey] = useState(false);
   const requestRef = useRef<AbortController | null>(null), generation = useRef(0);

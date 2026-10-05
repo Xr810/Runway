@@ -12,7 +12,7 @@ import { currencies, formatMoney, gigSchema, gigStatuses, gigTypes, incomeSchema
 import { readJson } from "@/lib/api-response";
 import { cn } from "@/lib/utils";
 import { EmptyState, PageHeader, Pill, Segmented } from "../ui";
-import { useDesk } from "../store";
+import { useAssistantPanel } from "../assistant-panel-context";
 
 const selectClass = "h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/50";
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -21,7 +21,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 type PaymentDraft = { item: Gig; payment: Income; amount: string; isNew: boolean };
 
 export default function PartTimeView() {
-  const { askAssistant } = useDesk();
+  const { askAssistant } = useAssistantPanel();
   const [items, setItems] = useState<Gig[]>([]), [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [kind, setKind] = useState<"all" | Gig["type"]>("all"), [query, setQuery] = useState(""), [archived, setArchived] = useState(false);
   const [editing, setEditing] = useState<Gig | null>(null), [payment, setPayment] = useState<PaymentDraft | null>(null), [busy, setBusy] = useState(false);

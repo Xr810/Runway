@@ -148,7 +148,8 @@ test("the built-in agent reads module data before returning a validated action w
   const agent = { entries: [existing], deleted: [], directory: { revision: 0, companies: [], channels: [] }, gigs: [], watches: [], reminders: [], profile, scanSettings: { enabled: true, time: "08:00", maxAddPerWatch: 5 }, ai: { base, model: "m", revision: 0 } };
   try {
     const answer = await askAi({ messages: [{ role: "user", text: "明天上午十点添加技术面试" }], images: [] }, [existing], { agent, profile, pages: [], reminders: [], watches: [], read: async r => { reads++; assert.equal(r.module, "entries"); return existing; } }, undefined, { base, key: "k", model: "m", revision: 0, source: "environment" });
-    assert.equal(reads, 1); assert.equal(calls, 3); assert.equal(answer.actions?.length, 1); assert.equal(answer.actions?.[0].path, "/api/desk");
+    assert.equal(reads, 1); assert.equal(calls, 3); assert.equal(answer.actions?.length, 1); assert.equal(answer.actions?.[0].command, "entries");
+    assert.equal(answer.actions?.[0].path, undefined);
     assert.equal(existing.appointments.length, 0);
   } finally { server.close(); delete process.env.AI_BASE_URL; }
 });

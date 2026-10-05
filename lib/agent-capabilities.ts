@@ -7,27 +7,93 @@ import { gigSchema, incomeSchema } from "./part-time-contract";
 import { watchSchema } from "./watches";
 import { reminderSchema } from "./reminder-schema";
 import { profileSchema } from "./enrichment-contract";
+import type { AgentAction } from "./agent-contract";
+import type { AgentCommand } from "./agent-commands";
+import type { AgentPolicy } from "./agent-policy";
+
+export const commandForModule = {
+  entry: "entries",
+  appointment: "entries",
+  progress: "entries",
+  version: "entries",
+  company: "directory",
+  channel: "directory",
+  gig: "gigs",
+  payment: "gigs",
+  watch: "watches",
+  reminder: "reminders",
+  profile: "profile",
+  scanSettings: "scanSettings",
+  model: "model",
+  notifications: "notifications",
+  evaluation: "evaluation",
+  scan: "scan",
+  companyCompletion: "companyCompletion",
+  assessment: "assessment",
+  brief: "brief",
+} satisfies Record<AgentAction["module"], AgentCommand>;
 
 const fieldSchemas: Record<string, z.AnyZodObject> = {
-  entry: entryAgentFields, appointment: appointmentSchema.innerType().omit({ id: true }), progress: progressSchema.omit({ id: true }),
-  company: companyProfileSchema, channel: channelSchema,
-  gig: gigSchema.omit({ id: true, revision: true, payments: true }), payment: incomeSchema.innerType().innerType().omit({ id: true, voided: true }),
-  watch: watchSchema.omit({ id: true, revision: true }), reminder: reminderSchema.omit({ id: true, revision: true }),
-  profile: profileSchema.omit({ revision: true, cv: true }), scanSettings: scanFields, model: z.object({ model: z.string() }),
+  entry: entryAgentFields,
+  appointment: appointmentSchema.innerType().omit({ id: true }),
+  progress: progressSchema.omit({ id: true }),
+  company: companyProfileSchema,
+  channel: channelSchema,
+  gig: gigSchema.omit({ id: true, revision: true, payments: true }),
+  payment: incomeSchema.innerType().innerType().omit({ id: true, voided: true }),
+  watch: watchSchema.omit({ id: true, revision: true }),
+  reminder: reminderSchema.omit({ id: true, revision: true }),
+  profile: profileSchema.omit({ revision: true, cv: true }),
+  scanSettings: scanFields,
+  model: z.object({ model: z.string() }),
 };
-const labels: Record<string, string> = { entry: "岗位、项目、比赛", appointment: "面试日程", progress: "项目进度", company: "公司", channel: "渠道", gig: "兼职", payment: "收入", watch: "招聘关注", reminder: "提醒", profile: "个人背景与简历文字", scanSettings: "自动扫描设置", model: "内置模型", notifications: "通知", evaluation: "评估锁定", brief: "今日简报", scan: "招聘扫描", companyCompletion: "公司资料补全", assessment: "内置评估", version: "历史正文恢复" };
-const values = (s: z.ZodTypeAny): string[] => s instanceof z.ZodEnum ? s.options : s instanceof z.ZodLiteral ? [s.value] : [];
+const labels: Record<string, string> = {
+  entry: "岗位、项目、比赛",
+  appointment: "面试日程",
+  progress: "项目进度",
+  company: "公司",
+  channel: "渠道",
+  gig: "兼职",
+  payment: "收入",
+  watch: "招聘关注",
+  reminder: "提醒",
+  profile: "个人背景与简历文字",
+  scanSettings: "自动扫描设置",
+  model: "内置模型",
+  notifications: "通知",
+  evaluation: "评估锁定",
+  brief: "今日简报",
+  scan: "招聘扫描",
+  companyCompletion: "公司资料补全",
+  assessment: "内置评估",
+  version: "历史正文恢复",
+};
+const values = (s: z.ZodTypeAny): string[] =>
+  s instanceof z.ZodEnum ? s.options : s instanceof z.ZodLiteral ? [s.value] : [];
 /** Derived from the accepted action schema, shared by model instructions and the capability UI. */
-export const agentCapabilities = agentActionSchema.options.flatMap(schema => values(schema.shape.module).map(module => ({
-  module, label: labels[module], operations: values(schema.shape.operation),
-  fields: fieldSchemas[module] ? Object.keys(fieldSchemas[module].shape) : [],
-  parameters: Object.keys(schema.shape).filter(k => !["module", "operation", "fields"].includes(k)),
-  confirmation: true,
-})));
+export const agentCapabilities = agentActionSchema.options.flatMap((schema) =>
+  values(schema.shape.module).map((module) => ({
+    module,
+    label: labels[module],
+    operations: values(schema.shape.operation),
+    fields: fieldSchemas[module] ? Object.keys(fieldSchemas[module].shape) : [],
+    parameters: Object.keys(schema.shape).filter(
+      (k) => !["module", "operation", "fields"].includes(k),
+    ),
+    confirmation: true,
+  })),
+);
 export const agentReadModules = agentReadSchema.shape.module.options;
-export const agentCapabilityPrompt = `
+export function capabilitiesForPolicy(policy: AgentPolicy) {
+  return policy.enabled
+    ? agentCapabilities.filter((capability) =>
+        policy.commands.includes(commandForModule[capability.module as AgentAction["module"]]),
+      )
+    : [];
+}
+export const agentCapabilityPrompt = (capabilities = agentCapabilities) => `
 你是 Runway 内置 Agent，具有以下站内能力，不依赖外部助手。能力清单由实际代码生成：
-${JSON.stringify(agentCapabilities)}
+${JSON.stringify(capabilities)}
 只输出一个 JSON 对象。需要读取时：{"reads":[{"module":"entries","id":"已有记录ID"}]}，等待真实工具结果后再继续，不能伪造结果。每轮最多4个读取，最多6轮。只读模块：${agentReadModules.join(",")}。列表分页20条，用offset；长文本分片也用offset，不能把分片当全文。notifications分页用before=nextBefore；evaluations可指定kind和id。capabilities用于检查能力。
 最终输出 {"reply":"简洁回复","actions":[{"module":"entry","operation":"update","targetId":"真实ID","fields":{"notes":"新内容"}}],"filter":null}。不要使用旧drafts/partTime/reminders/profile等独立提案字段。所有写入只形成确认卡片，不能说已经执行。
 新增用operation=add，不传targetId；更新/删除/恢复必须用已有targetId。company/channel 的targetId是原名称。fields只写本次修改。ID、revision、系统时间由网站管理，不能改。

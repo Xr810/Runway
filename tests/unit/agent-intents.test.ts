@@ -20,7 +20,8 @@ test("explicit company logo completion is routed to the in-product action", () =
   const result = routeCompanyLogoCompletion(reply, snapshot, prompt);
   assert.match(result.reply, /补全缺失的官网与官方图标/);
   assert.equal(result.actions?.length, 1);
-  assert.equal(result.actions?.[0].path, "/api/companies/complete");
+  assert.equal(result.actions?.[0].command, "companyCompletion");
+  assert.equal(result.actions?.[0].path, undefined);
   assert.deepEqual(result.actions?.[0].body, { names: undefined, refreshLogo: true });
 });
 

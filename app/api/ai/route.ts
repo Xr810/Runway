@@ -3,7 +3,8 @@ import { validOrigin } from "@/lib/session";
 import { hit } from "@/lib/rate-limit";
 import { aiRequestSchema, validImageData } from "@/lib/ai-contract";
 import { getAiConfig, publicAiConfig } from "@/lib/ai-config";
-import { agentCapabilities, agentReadModules } from "@/lib/agent-capabilities";
+import { capabilitiesForPolicy, agentReadModules } from "@/lib/agent-capabilities";
+import { agentPolicy } from "@/lib/agent-policy";
 import { startAgentRun, listAgentRuns, AgentRunError } from "@/lib/agent-runtime";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -12,8 +13,9 @@ export async function GET(request: Request) {
   const user = await getUser(); if (!user) return json({ error: "请先登录" }, 401);
   try {
     if (new URL(request.url).searchParams.has("runs")) return json({ runs: await listAgentRuns(user.userId) });
-    const config = publicAiConfig(await getAiConfig());
-    return json({ configured: config.configured, model: config.model, runtime: "langgraph", capabilities: agentCapabilities, reads: agentReadModules });
+    const settings = await getAiConfig();
+    const config = publicAiConfig(settings);
+    return json({ configured: config.configured, model: config.model, runtime: "langgraph", capabilities: capabilitiesForPolicy(agentPolicy(settings)), reads: config.enabled ? agentReadModules : [] });
   } catch { return json({ error: "读取 AI 状态失败。" }, 503); }
 }
 export async function POST(request: Request) {
