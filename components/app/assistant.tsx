@@ -53,6 +53,8 @@ const fieldNames: Record<string, string> = {
   companyType: "公司类型",
   companyBasis: "分类依据",
   companySource: "依据链接",
+  companyCountry: "公司所属国家／地区",
+  companyDescription: "公司介绍",
   url: "原始链接",
   deadline: "截止日期",
   applied: "投递日期",

@@ -107,7 +107,7 @@ test("malformed bodies are client errors, not 503", async () => {
   assert.equal((await call("/api/desk", { method: "POST", body: "{not json" })).status, 400);
   assert.equal((await call("/api/desk", { method: "POST", body: { action: "restoreVersions", versions: [{ id: "a", entry_id: "b", data: "{bad", created: "2026-01-01" }] } })).status, 400);
 });
-test("saving uses optimistic revisions and keeps JD history", async () => {
+test("saving uses optimistic revisions without generating JD history", async () => {
   const saved = await create({ jd: "First version of the description" });
   assert.equal(saved.revision, 1);
   const stale = await call("/api/desk", { method: "POST", body: { action: "save", entry: { ...saved, revision: 0, title: "[test] stale" } } });
@@ -116,8 +116,8 @@ test("saving uses optimistic revisions and keeps JD history", async () => {
   assert.equal(next.body.entry.revision, 2);
   const detail = await call("/api/desk?entry=" + saved.id);
   assert.equal(detail.body.entry.jd, "Second version");
-  assert.equal(detail.body.versions.length, 1);
-  assert.equal(JSON.parse(detail.body.versions[0].data).jd, "First version of the description");
+  assert.equal(detail.body.versions.length, 0);
+  assert.equal(detail.body.entry.jdSavedAt, "");
 });
 test("the list omits JD text but reports its length", async () => {
   const saved = await create({ jd: "x".repeat(1234) });
@@ -285,6 +285,8 @@ test("attachment upload and backup restore cannot cross account boundaries", asy
   aUpload.append("entryId", aEntry.id); aUpload.append("file", new File(["A restore attachment"], "restore-a.txt", { type: "text/plain" }));
   const uploaded = await call("/api/desk", { method: "POST", form: aUpload });
   assert.equal(uploaded.status, 200, JSON.stringify(uploaded.body));
+  const legacy = { id: randomUUID(), entry_id: aEntry.id, data: JSON.stringify({ jd: "A original" }), created: new Date().toISOString() };
+  assert.equal((await call("/api/desk", { method: "POST", body: { action: "restoreVersions", versions: [legacy] } })).status, 200);
   const backup = await call("/api/desk?export=1");
   const aVersion = backup.body.versions.find(v => v.entry_id === aEntry.id);
   assert(aVersion, "account A export should contain its version history");

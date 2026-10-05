@@ -74,6 +74,7 @@ export default function EntryEditor() {
           <Field label={copy.followUp + "日期"} htmlFor="f-follow"><Input id="f-follow" type="date" value={value.followUp} onChange={e => set("followUp", e.target.value)} /></Field>
           <Field label={copy.applied + "日期"} htmlFor="f-applied"><Input id="f-applied" type="date" value={value.applied} onChange={e => set("applied", e.target.value)} /></Field>
           {copy.salary && <Field label={copy.salary} htmlFor="f-salary"><Input id="f-salary" value={value.salary} onChange={e => set("salary", e.target.value)} /></Field>}
+          {isJob && <Field label="公司所属国家／地区" htmlFor="f-company-country" hint="例如美国、德国；不是岗位工作地点。"><Input id="f-company-country" maxLength={200} value={value.companyCountry} onChange={e => set("companyCountry", e.target.value)} /></Field>}
         </Group>
         {isJob && <Group title="投递" description="渠道是你实际投递的方式，与原始链接分开记录。">
           <Field label="投递渠道" htmlFor="f-channel"><Input id="f-channel" list="channel-options" maxLength={100} placeholder="公司官网、Indeed…" value={value.applicationChannel} onChange={e => set("applicationChannel", e.target.value)} />
@@ -91,6 +92,7 @@ export default function EntryEditor() {
           <Field label="分类依据链接" htmlFor="f-company-src"><Input id="f-company-src" type="url" placeholder="https://" value={value.companySource} onChange={e => set("companySource", e.target.value)} /></Field>
           <Field label="分类依据" htmlFor="f-company-basis" hint="按集团背景归类，不是法律股权认定。" wide><Textarea id="f-company-basis" rows={2} value={value.companyBasis} onChange={e => set("companyBasis", e.target.value)} /></Field>
         </Group>}
+        {isJob && <Group title="公司介绍"><Field label="公司介绍" htmlFor="f-company-description" wide><Textarea id="f-company-description" rows={4} maxLength={20000} placeholder="公司业务、产品与背景介绍" value={value.companyDescription} onChange={e => set("companyDescription", e.target.value)} /></Field></Group>}
         <Group title={copy.text} description={copy.textHint}>
           <Field label={isProject ? "说明" : "完整原文"} htmlFor="f-jd" wide><Textarea id="f-jd" rows={10} className={isProject ? "leading-relaxed" : "font-mono text-xs leading-relaxed"} value={value.jd} onChange={e => set("jd", e.target.value)} /></Field>
           {!isProject && <label className="flex items-center gap-2 text-sm sm:col-span-2"><Checkbox checked={value.jdStatus === "complete"} onCheckedChange={v => set("jdStatus", v === true ? "complete" : value.jd || value.summary ? "partial" : "missing")} />已核对这是完整原文</label>}

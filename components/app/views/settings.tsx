@@ -1,6 +1,7 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Bell, DatabaseBackup, Plug, Sparkles, UserRound } from "lucide-react";
+import { Bell, DatabaseBackup, Info, Plug, Sparkles, UserRound } from "lucide-react";
+import { version } from "@/package.json";
 import { cn } from "@/lib/utils";
 import { useNavigationGuard } from "../navigation-guard-context";
 import { PageHeader } from "../ui";
@@ -16,6 +17,7 @@ const sections = [
   { key: "reminders", label: "招聘提醒", hint: "投递、测评与面试", icon: Bell },
   { key: "integrations", label: "自动化", hint: "每日扫描 · Muse 接入", icon: Plug },
   { key: "data", label: "数据与备份", hint: "导出与恢复", icon: DatabaseBackup },
+  { key: "version", label: `Runway ${version}`, hint: "版本与更新日志", icon: Info },
 ] as const;
 type Section = (typeof sections)[number]["key"];
 
@@ -38,6 +40,19 @@ export default function SettingsView() {
         {current === "reminders" && <ReminderPreferencesEditor />}
         {current === "integrations" && <AutomationSettings />}
         {current === "data" && <DataSettings />}
+        {current === "version" && <section aria-labelledby="version-title" className="flex flex-col gap-5">
+          <div><h2 id="version-title" className="text-lg font-semibold">版本与更新日志</h2><p className="mt-1 text-sm text-muted-foreground">当前版本 {version}</p></div>
+          <article className="rounded-xl border bg-card p-5">
+            <h3 className="font-semibold">0.1.0</h3>
+            <p className="mt-1 text-sm">首个正式上线版本</p>
+            <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
+              <li>岗位记录、招聘阶段与面试日程管理。</li>
+              <li>AI 助手、岗位评估与招聘提醒。</li>
+              <li>项目、比赛及兼职收入管理。</li>
+              <li>多用户账号隔离、附件与数据备份恢复。</li>
+            </ul>
+          </article>
+        </section>}
       </div>
     </div>
   </>;

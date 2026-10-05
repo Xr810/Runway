@@ -1,6 +1,6 @@
 services:
   runway:
-    command: APP_ORIGIN="$PUBLIC_URL" npm run dev -- --hostname 0.0.0.0 --port "$PORT"
+    command: RUNWAY_FAST_DEV=1 APP_ORIGIN="$PUBLIC_URL" npm run dev -- --hostname 0.0.0.0 --port "$PORT"
     health: /api/health
     portal:
       title: Runway

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getUser } from "@/lib/auth";
 import { validOrigin } from "@/lib/session";
 import { pool } from "@/lib/postgres";
+import { uploadAttachment } from "@/lib/attachments";
 import { localFiles, FileTooLarge } from "@/lib/files";
 import { EntryError, deleteEntry, getEntry, listDeleted, listEntries, listSummaries, listVersions, patchEntry, restoreVersions, saveEntry, undeleteEntry } from "@/lib/entries";
 import { allWatches } from "@/lib/watch-storage";
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
     // A full export also carries the recycle bin, reminders and personal background, so
     // attachments of trashed records have parents and nothing is lost on migration (#2 #9).
     if (full) {
-      const [deleted, reminders, profile] = await Promise.all([listDeleted(), listReminders().then(r => r.reminders), evaluationProfile()]);
+      const [deleted, reminders, profile] = await Promise.all([listDeleted(true), listReminders().then(r => r.reminders), evaluationProfile()]);
       return json({ entries, files, versions, watches, directory, reminderPreferences, deleted, reminders, profile });
     }
     return json({ entries, files, versions, watches, directory, reminderPreferences });
@@ -93,13 +94,8 @@ async function upload(request: Request) {
     const restoreId = form.get("restoreId");
     if (restoreId && (typeof restoreId !== "string" || !/^[a-zA-Z0-9_-]{1,100}$/.test(restoreId))) return json({ error: "附件 ID 无效" }, 400);
     const fileId = typeof restoreId === "string" ? restoreId : crypto.randomUUID();
-    const existing = (await pool.query<{ entry_id: string }>("SELECT entry_id FROM files WHERE id=$1", [fileId])).rows[0];
-    if (existing) return existing.entry_id === entryId ? json({ id: fileId }) : json({ error: "附件 ID 冲突" }, 409);
     const createdInput = form.get("created"), created = typeof createdInput === "string" && !Number.isNaN(Date.parse(createdInput)) ? createdInput : new Date().toISOString();
-    await localFiles.put(fileId, file.stream(), maxFile);
-    try { await pool.query("INSERT INTO files (id,entry_id,name,type,size,created) VALUES ($1,$2,$3,$4,$5,$6)", [fileId, entryId, file.name.slice(0, 300), file.type, file.size, created]); }
-    catch (e) { await localFiles.delete(fileId); throw e; }
-    return json({ id: fileId });
+    return json(await uploadAttachment(fileId, entryId, file, created));
   } catch (e) {
     if (e instanceof FileTooLarge) return json({ error: "文件需为 1 字节至 15 MB" }, 413);
     console.error(e); return json({ error: "附件保存失败，请重试" }, 503);

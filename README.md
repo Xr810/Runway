@@ -12,6 +12,18 @@ does not provide teams, shared workspaces, or shared records. Deployment guidanc
 This public source snapshot excludes the original import history, user records, CVs,
 attachments, environment files, and private infrastructure scripts.
 
+## 0.1.0 — 首个正式上线版本
+
+- 岗位记录、招聘阶段与面试日程管理。
+- AI 助手、岗位评估与招聘提醒。
+- 项目、比赛及兼职收入管理。
+- 多用户账号隔离、附件与数据备份恢复。
+
+设置中的「Runway 0.1.0」入口可查看更新日志，当前版本号读取自 `package.json`。
+本版新增公司所属国家／地区及公司介绍，不再生成或显示 JD 原文历史与保存时间；
+旧历史数据保留兼容。附件发布不再覆盖已有内容，完整备份包含全部回收站记录并校验
+附件与简历；恢复使用单个数据库事务，保留已有记录和设置，支持失败后重试。
+
 ## Layout
 
 | Path | Contents |
@@ -39,6 +51,12 @@ Requirements: Node.js 22.13 or newer, npm, and PostgreSQL 17.
 4. Run `node --env-file=.env.local scripts/migrate.mjs`, then `npm run dev`.
 5. Open `http://localhost:3000` and register with an email address and password (minimum 10
    characters).
+
+The orb service uses `RUNWAY_FAST_DEV=1` to enable Turbopack minification for high-latency
+preview connections. This reduces script transfer but component edits can trigger a full reload
+and lose unsaved browser state; source maps remain enabled. Remove this flag from
+`.amp/services.yaml` and run `amp orb services ensure` when state-preserving Fast Refresh is more
+important. Normal `npm run dev` and production builds keep their original settings.
 
 Google sign-in is optional. Create a Google OAuth web client, configure its authorized redirect
 URI as `${APP_ORIGIN}/api/auth/google/callback`, and set `GOOGLE_CLIENT_ID` and

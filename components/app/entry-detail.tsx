@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
-import { CalendarClock, Clock3, Download, Flag, LoaderCircle as Spinner, MoreHorizontal, Trash2, ExternalLink, FileText, History, LoaderCircle, Paperclip, Pencil, Plus, Upload } from "lucide-react";
+import { CalendarClock, Clock3, Download, Flag, LoaderCircle as Spinner, MoreHorizontal, Trash2, ExternalLink, FileText, LoaderCircle, Paperclip, Pencil, Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { type Entry, score, statusesFor } from "@/lib/model";
 import { appointmentDate, appointmentTime, stageProgress } from "@/lib/appointments";
@@ -11,9 +11,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useDesk, type VersionFull } from "./store";
-import { CompanyMark, EmptyState, Facts, Pill, ScoreValue, formatDay, kindCopy, relativeDay, stamp, toneOf, StatusBadge } from "./ui";
+import { useDesk } from "./store";
+import { CompanyMark, EmptyState, Facts, Pill, ScoreValue, formatDay, kindCopy, relativeDay, toneOf, StatusBadge } from "./ui";
 import { KindIcon } from "./views/projects";
 import { EvaluationTimeline, useEnrichment } from "./evaluation";
 import ProgressDialog, { newProgress, type ProgressDraft } from "./progress-dialog";
@@ -33,11 +32,11 @@ function DateCell({ label, value }: { label: string; value: string }) {
 }
 
 export default function EntryDetail() {
-  const { selected: entry, selectedVersions: versions, selectedLoading, closeEntry, editEntry, data, patchEntry, removeEntry, upload, logoFor, reload } = useDesk();
+  const { selected: entry, selectedLoading, closeEntry, editEntry, data, patchEntry, removeEntry, upload, logoFor, reload } = useDesk();
   // Composite scores follow the same custom weights as 洞察 (#6).
   const { feed } = useEnrichment();
   const weights = feed?.profile.evaluationWeights;
-  const [version, setVersion] = useState<VersionFull | null>(null), [busy, setBusy] = useState(false), [progress, setProgress] = useState<ProgressDraft | null>(null);
+  const [busy, setBusy] = useState(false), [progress, setProgress] = useState<ProgressDraft | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const isJob = entry?.kind === "job", copy = kindCopy[entry?.kind ?? "job"];
   async function changeStatus(status: string) {
@@ -81,7 +80,7 @@ export default function EntryDetail() {
               <TabsTrigger value="overview">概览</TabsTrigger>
               <TabsTrigger value="text">{copy.text}</TabsTrigger>
               {isJob ? <TabsTrigger value="evaluation">评估</TabsTrigger> : <TabsTrigger value="progress">进度与里程碑 <span className="tabular text-muted-foreground">{entry.progress.length}</span></TabsTrigger>}
-              <TabsTrigger value="files">附件与历史 {files.length > 0 && <span className="tabular text-muted-foreground">{files.length}</span>}</TabsTrigger>
+              <TabsTrigger value="files">附件 {files.length > 0 && <span className="tabular text-muted-foreground">{files.length}</span>}</TabsTrigger>
             </TabsList></div>
             <div className="px-6 py-6">
               <TabsContent value="overview" className="flex flex-col gap-7">
@@ -109,6 +108,7 @@ export default function EntryDetail() {
                     { label: "岗位类型", value: entry.employmentType },
                     { label: "工作时间", value: entry.schedule },
                     { label: "薪资", value: entry.salary },
+                    { label: "公司所属国家／地区", value: entry.companyCountry },
                   ] : entry.kind === "project" ? [
                     { label: "项目链接", value: entry.url && <a className="inline-flex items-center gap-1 break-all text-primary hover:underline" href={entry.url} target="_blank" rel="noreferrer">{entry.url.replace(/^https?:\/\//, "")}<ExternalLink className="size-3 shrink-0" /></a>, wide: true },
                     { label: "团队 / 合作方", value: entry.organization },
@@ -119,11 +119,9 @@ export default function EntryDetail() {
                     { label: "报名链接", value: entry.applicationUrl && <a className="text-primary hover:underline" href={entry.applicationUrl} target="_blank" rel="noreferrer">打开</a> },
                   ]} />
                 </Section>
-                {isJob && <Section title="公司背景">
+                {isJob && <Section title="公司介绍">
                   <div className="rounded-lg border bg-card px-3 py-2.5">
-                    <p className="text-sm font-medium">{entry.companyType}</p>
-                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{entry.companyBasis || "尚未核实。"}</p>
-                    {entry.companySource && <a className="mt-1.5 inline-flex items-center gap-1 text-xs text-primary hover:underline" href={entry.companySource} target="_blank" rel="noreferrer">查看来源<ExternalLink className="size-3" /></a>}
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed">{entry.companyDescription || "暂无公司介绍，可在编辑中补充。"}</p>
                   </div>
                 </Section>}
                 {entry.notes && <Section title="备注"><p className="text-sm leading-relaxed whitespace-pre-wrap">{entry.notes}</p></Section>}
@@ -135,8 +133,7 @@ export default function EntryDetail() {
               <TabsContent value="text" className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <Pill tone={entry.jdStatus === "complete" ? "green" : entry.jdStatus === "partial" ? "amber" : "gray"}>{jdLabel(entry)}</Pill>
-                  {entry.jdSavedAt && <span className="text-xs text-muted-foreground">保存于 {stamp(entry.jdSavedAt)}</span>}
-                  {entry.jd && <Button variant="ghost" size="sm" className="ml-auto" onClick={() => download(new Blob([entry.title + "\n" + entry.url + "\n保存时间：" + entry.jdSavedAt + "\n\n" + entry.jd], { type: "text/plain;charset=utf-8" }), entry.title + ".txt")}><Download />下载</Button>}
+                  {entry.jd && <Button variant="ghost" size="sm" className="ml-auto" onClick={() => download(new Blob([entry.title + "\n" + entry.url + "\n\n" + entry.jd], { type: "text/plain;charset=utf-8" }), entry.title + ".txt")}><Download />下载</Button>}
                 </div>
                 {selectedLoading ? <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><Spinner className="size-4 animate-spin" />正在读取全文…</p> : entry.jd ? <article className="rounded-xl border bg-card px-5 py-4 text-sm leading-7 whitespace-pre-wrap">{entry.jd}</article>
                   : <EmptyState icon={<FileText />} title={"还没有" + copy.text} description={copy.textHint} action={<Button size="sm" variant="outline" onClick={() => editEntry(entry)}><Pencil />编辑</Button>} />}
@@ -164,21 +161,12 @@ export default function EntryDetail() {
                   {files.length ? <ul className="overflow-hidden rounded-lg border bg-card">{files.map(f => <li key={f.id} className="border-b last:border-b-0"><a href={"/api/desk?file=" + f.id} className="flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-muted/50"><Paperclip className="size-4 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{f.name}</span><span className="tabular text-xs text-muted-foreground">{Math.max(1, Math.round(f.size / 1024))} KB</span><Download className="size-4 text-muted-foreground" /></a></li>)}</ul>
                     : <p className="text-sm text-muted-foreground">还没有附件。简历版本、截图、确认邮件都可以放在这里（单个文件最大 15 MB）。</p>}
                 </Section>
-                <Section title="原文历史版本">
-                  {versions.length ? <ul className="overflow-hidden rounded-lg border bg-card">{versions.map(v => <li key={v.id} className="border-b last:border-b-0"><button className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm hover:bg-muted/50" onClick={() => setVersion(v)}><History className="size-4 text-muted-foreground" />{stamp(v.created)}<span className="ml-auto text-xs text-muted-foreground">查看</span></button></li>)}</ul>
-                    : <p className="text-sm text-muted-foreground">原文修改后，旧版本会保存在这里。</p>}
-                </Section>
               </TabsContent>
             </div>
           </Tabs>
         </>}
       </SheetContent>
     </Sheet>
-    <Dialog open={!!version} onOpenChange={open => { if (!open) setVersion(null); }}>
-      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>历史原文</DialogTitle><DialogDescription>{version && stamp(version.created)}</DialogDescription></DialogHeader>
-        <article className="rounded-lg bg-muted/60 px-4 py-3 text-sm leading-7 whitespace-pre-wrap">{version ? (() => { const d = JSON.parse(version.data); return d.jd || d.summary || "该版本没有正文"; })() : ""}</article>
-      </DialogContent>
-    </Dialog>
     <ProgressDialog draft={progress} onChange={setProgress} />
   </>;
 }
