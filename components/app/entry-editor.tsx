@@ -500,16 +500,18 @@ export default function EntryEditor() {
                 />
               </Field>
             </Group>
-            <Group title="备注">
-              <Field label="备注" htmlFor="f-notes" wide>
-                <Textarea
-                  id="f-notes"
-                  rows={4}
-                  value={value.notes}
-                  onChange={(e) => set("notes", e.target.value)}
-                />
-              </Field>
-            </Group>
+            {!isJob && (
+              <Group title="备注">
+                <Field label="备注" htmlFor="f-notes" wide>
+                  <Textarea
+                    id="f-notes"
+                    rows={4}
+                    value={value.notes}
+                    onChange={(e) => set("notes", e.target.value)}
+                  />
+                </Field>
+              </Group>
+            )}
             {isJob && (
               <Group title="手动评分" description="0–10 分。手动修改会锁定结果，自动评估不再覆盖。">
                 <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:grid-cols-3">

@@ -60,6 +60,7 @@ try {
       "tests/agent-transaction.test.ts",
       "tests/entry-read.test.ts",
       "tests/postgres-disconnect.test.ts",
+      "tests/job-misc-fields.test.ts",
     ],
     env,
   );

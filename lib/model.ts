@@ -250,9 +250,17 @@ export const legacyAiEntryFields = {
   academic: true,
 } as const satisfies Partial<Record<keyof typeof entryObject.shape, true>>;
 
-export const entrySchema = entryObject
-  .refine((v) => statusesFor(v.kind).includes(v.status), "无效状态")
-  .refine((v) => v.jdStatus !== "complete" || v.jd.trim().length > 0, "完整存档必须包含正文");
+// Discard retired job fields before validation so old imports remain readable,
+// including legacy notes/extra values that no longer match their former types.
+export const entrySchema = z.preprocess(
+  (input) =>
+    input && typeof input === "object" && "kind" in input && input.kind === "job"
+      ? { ...input, notes: "", extra: {} }
+      : input,
+  entryObject
+    .refine((v) => statusesFor(v.kind).includes(v.status), "无效状态")
+    .refine((v) => v.jdStatus !== "complete" || v.jd.trim().length > 0, "完整存档必须包含正文"),
+);
 export type Entry = z.infer<typeof entrySchema>;
 export type Attachment = {
   id: string;

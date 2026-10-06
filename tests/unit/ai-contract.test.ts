@@ -108,7 +108,7 @@ test("drafts cannot set protected fields and flag duplicates", () => {
   ).drafts[0];
   assert.equal(update.entry.revision, 3);
   assert.equal(update.entry.jd, existing.jd);
-  assert.deepEqual(update.entry.extra, { preserved: true });
+  assert.deepEqual(update.entry.extra, {});
   assert.equal(update.entry.nextAction, "跟进申请");
   assert.deepEqual(update.changedFields, ["status", "nextAction"]);
   const appointment = appointmentSchema.parse({

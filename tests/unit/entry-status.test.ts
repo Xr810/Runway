@@ -226,3 +226,21 @@ test("write policies retain distinct patch and AI boundaries without exposing ne
   assert.equal(Object.hasOwn(model.legacyAiEntryFields, "academic"), true);
   assert.equal(db.writes.length, 0);
 });
+
+test("job writers discard retired fields while other record kinds retain them", async () => {
+  for (const kind of ["job", "project", "competition"] as const) {
+    const old = { ...model.blankEntry(kind), title: "Retired fields", revision: 2 };
+    const fields = { notes: "Fixture note", extra: { source: "Fixture import" } };
+    const db = writers(old);
+    const full = (await db.saveEntry({ ...old, ...fields })).entry;
+    const patched = await db.patchEntry(old.id, old.revision, fields);
+    for (const entry of [full, patched, ...db.writes]) {
+      assert.equal(entry.notes, kind === "job" ? "" : fields.notes);
+      assert.deepEqual(entry.extra, kind === "job" ? {} : fields.extra);
+    }
+    assert.equal(old.notes, "", "normalization must not mutate input");
+  }
+  const job = { ...model.blankEntry("job"), title: "Legacy backup", notes: null, extra: [] };
+  assert.equal(model.entrySchema.parse(job).notes, "");
+  assert.deepEqual(model.entrySchema.parse(job).extra, {});
+});

@@ -159,15 +159,7 @@ export default function JobsView() {
             (aiFilter.ids ? aiFilter.ids.includes(e.id) : matchesAiFilter(e, aiFilter))) &&
           attributes.every((a) => !filters[a.key] || e[a.key] === filters[a.key]) &&
           (!query ||
-            [
-              e.title,
-              e.organization,
-              e.notes,
-              e.location,
-              e.nextAction,
-              e.summary,
-              e.applicationChannel,
-            ]
+            [e.title, e.organization, e.location, e.nextAction, e.summary, e.applicationChannel]
               .join(" ")
               .toLowerCase()
               .includes(query.toLowerCase())),
@@ -263,7 +255,7 @@ export default function JobsView() {
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               aria-label="搜索岗位"
-              placeholder="搜索公司、岗位、备注…"
+              placeholder="搜索公司、岗位、摘要…"
               className="h-8 bg-card pl-8"
               value={query}
               onChange={(e) => setQuery(e.target.value)}

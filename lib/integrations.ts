@@ -147,14 +147,10 @@ export async function applyIntegrationEvent(actor: IntegrationClient, event: Int
               ]
             : before.appointments,
         );
-        const notes = event.note
-          ? `${before.notes}${before.notes ? "\n\n" : ""}[${actor.name} · ${event.source.occurredAt}] ${event.note}`
-          : before.notes;
         entry = validateJob({
           ...before,
           ...patch,
           appointments,
-          notes,
           revision: before.revision + 1,
           ...(event.patch.jd !== undefined && event.patch.jd !== before.jd
             ? {
