@@ -14,6 +14,7 @@ import { type Entry, type Attachment, blankEntry, entrySchema } from "@/lib/mode
 import { type Directory, identity } from "@/lib/journey";
 import { type CompanyWatch } from "@/lib/watches";
 import { type EnrichmentTarget } from "@/lib/enrichment-contract";
+import type { EntryReadIssue } from "@/lib/entries";
 import { defaultReminderPreferences, type ReminderPreferences } from "@/lib/recruiting-reminders";
 import { readJson } from "@/lib/api-response";
 import { AssistantPanelProvider } from "./assistant-panel-context";
@@ -28,6 +29,7 @@ export type VersionMeta = { id: string; entry_id: string; created: string };
 export type VersionFull = VersionMeta & { data: string };
 export type DeskData = {
   entries: ListEntry[];
+  entryReadIssues: EntryReadIssue[];
   files: Attachment[];
   versions: VersionMeta[];
   watches: CompanyWatch[];
@@ -56,6 +58,7 @@ async function fetchDesk(): Promise<DeskData> {
   >(await fetch("/api/desk", { cache: "no-store" }));
   return {
     ...d,
+    entryReadIssues: d.entryReadIssues ?? [],
     watches: d.watches || [],
     directory: d.directory || emptyDirectory,
     reminderPreferences: d.reminderPreferences ?? defaultReminderPreferences,
@@ -103,6 +106,7 @@ export function useDesk() {
 export function DeskProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<DeskData>({
     entries: [],
+    entryReadIssues: [],
     files: [],
     versions: [],
     watches: [],
@@ -124,10 +128,10 @@ export function DeskProvider({ children }: { children: ReactNode }) {
     if (!active.current) return false;
     const version = ++refreshVersion.current;
     try {
-      setError("");
       const next = await fetchDesk();
       if (!active.current || version !== refreshVersion.current) return false;
       setData(next);
+      setError("");
       try {
         const feed = await readJson<{
           states: {

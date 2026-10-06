@@ -17,6 +17,14 @@ Password accounts currently have no email verification or password-recovery flow
 requires Google's verified-email claim, but Runway never links Google and password identities
 automatically merely because their email addresses match.
 
+For record maintenance, administrators and Agents must use the account-scoped application
+writers/API with schema validation and revision checks, not direct SQL updates. After a write,
+read the record and the list again to verify it. Interactive lists report invalid record IDs
+and field paths without deleting or rewriting those records; counts exclude failed records.
+Exports and automation fail closed on invalid records rather than using incomplete snapshots.
+Keep diagnostic reports to IDs and field paths, never full record content. Reproduce and repair
+invalid data in a disposable environment before any explicitly authorized production repair.
+
 For vulnerabilities, use GitHub private vulnerability reporting when available. Do not
 include credentials or personal data in public issues. Rotate exposed credentials;
 deleting a file in the latest commit does not erase it from Git history.

@@ -21,7 +21,7 @@ export const appointmentSchema = z
     title: z.string().trim().min(1).max(300),
     type: z.enum(["interview", "assessment", "followup"]),
     startsAt: instant.or(z.literal("")),
-    endsAt: instant.optional(),
+    endsAt: z.preprocess((value) => (value === "" ? undefined : value), instant.optional()),
     location: z.string().max(2000).default(""),
     url: z
       .string()

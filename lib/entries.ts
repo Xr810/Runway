@@ -19,13 +19,32 @@ export class EntryError extends Error {
     super(message);
   }
 }
-type Row = { data: Entry; revision: number; updated: string };
+export type EntryReadIssue = { id: string; paths: string[] };
+class StoredEntryError extends EntryError {
+  constructor(public issue: EntryReadIssue) {
+    super(503, "记录校验失败，请核对记录 ID 和字段路径");
+  }
+}
+type Row = { id?: string; data: Entry; revision: number; updated: string };
 const parse = (row: Row) => {
-  const entry = entrySchema.parse({
+  const appointments = row.data?.appointments ?? [];
+  const parsed = entrySchema.safeParse({
     ...row.data,
-    appointments: normalizeStageStates(row.data.appointments ?? []),
+    appointments:
+      Array.isArray(appointments) && appointments.every((item) => item && typeof item === "object")
+        ? normalizeStageStates(appointments)
+        : appointments,
     revision: row.revision,
   });
+  if (!parsed.success) {
+    const issue = {
+      id: row.id ?? row.data?.id ?? "unknown",
+      paths: [...new Set(parsed.error.issues.map((item) => item.path.join(".") || "$"))],
+    };
+    console.warn("Invalid stored entry", issue);
+    throw new StoredEntryError(issue);
+  }
+  const entry = parsed.data;
   if (entry.kind === "job") {
     const oldNext = entry.nextAction,
       normalized = normalizeLegacyNextAction(entry.status, oldNext);
@@ -40,18 +59,33 @@ const parse = (row: Row) => {
 /** Live (not deleted) records, newest first. */
 export async function listEntries(db: Db = pool): Promise<Entry[]> {
   const rows = await db.query<Row>(
-    "SELECT data, revision, updated FROM entries WHERE deleted_at IS NULL ORDER BY updated DESC, id",
+    "SELECT data, revision, updated, id FROM entries WHERE deleted_at IS NULL ORDER BY updated DESC, id",
   );
   return rows.rows.map(parse);
 }
-/** List view: full records minus the JD text, which can be up to 300 KB each. */
-export async function listSummaries() {
-  return (await listEntries()).map((entry) => ({ ...entry, jd: "", jdChars: entry.jd.length }));
+/** Interactive list only: isolate bad rows, report identifiers, and never mutate stored data.
+ * Export and automation keep using strict listEntries so incomplete snapshots cannot be written. */
+export async function listSummaries(db: Db = pool) {
+  const rows = await db.query<Row>(
+    "SELECT data, revision, updated, id FROM entries WHERE deleted_at IS NULL ORDER BY updated DESC, id",
+  );
+  const entries: (Entry & { jdChars: number })[] = [];
+  const entryReadIssues: EntryReadIssue[] = [];
+  for (const row of rows.rows) {
+    try {
+      const entry = parse(row);
+      entries.push({ ...entry, jd: "", jdChars: entry.jd.length });
+    } catch (error) {
+      if (!(error instanceof StoredEntryError)) throw error;
+      entryReadIssues.push(error.issue);
+    }
+  }
+  return { entries, entryReadIssues };
 }
 export async function getEntry(id: string, db: Db = pool): Promise<Entry | null> {
   const row = (
     await db.query<Row>(
-      "SELECT data, revision, updated FROM entries WHERE id=$1 AND deleted_at IS NULL",
+      "SELECT data, revision, updated, id FROM entries WHERE id=$1 AND deleted_at IS NULL",
       [id],
     )
   ).rows[0];
@@ -69,7 +103,7 @@ export async function getVersion(id: string) {
 }
 export async function listDeleted(fullExport = false) {
   const rows = await pool.query<Row & { deleted_at: string }>(
-    "SELECT data, revision, updated, deleted_at FROM entries WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC" +
+    "SELECT data, revision, updated, deleted_at, id FROM entries WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC" +
       (fullExport ? "" : " LIMIT 200"),
   );
   return rows.rows.map((row) => ({ ...parse(row), deletedAt: row.deleted_at }));

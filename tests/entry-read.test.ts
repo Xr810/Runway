@@ -24,7 +24,8 @@ test("summary read baseline preserves full-JD validation and UTF-16 counts", asy
     const timings: number[] = [];
     for (let i = 0; i < 5; i++) {
       const start = performance.now();
-      const summaries = await listSummaries();
+      const { entries: summaries, entryReadIssues } = await listSummaries();
+      assert.deepEqual(entryReadIssues, []);
       timings.push(performance.now() - start);
       assert.equal(summaries.length, 100);
       assert.ok(
@@ -32,7 +33,7 @@ test("summary read baseline preserves full-JD validation and UTF-16 counts", asy
       );
     }
     const entries = await listEntries();
-    const summaries = await listSummaries();
+    const { entries: summaries } = await listSummaries();
     t.diagnostic(
       JSON.stringify({
         records: 100,
@@ -46,6 +47,63 @@ test("summary read baseline preserves full-JD validation and UTF-16 counts", asy
     await pool.query("UPDATE entries SET data=jsonb_set(data,'{jd}', '\"\"'::jsonb) WHERE id=$1", [
       entries[0].id,
     ]);
-    await assert.rejects(listSummaries(), /完整存档必须包含正文/);
+    const partial = await listSummaries();
+    assert.equal(partial.entries.length, 99);
+    assert.deepEqual(partial.entryReadIssues, [{ id: entries[0].id, paths: ["$"] }]);
+    await assert.rejects(listEntries(), /记录校验失败/);
+  });
+});
+
+test("empty optional endsAt is compatible; invalid rows are isolated without data loss or content logs", async (t) => {
+  const user = randomUUID();
+  await controlPool.query("INSERT INTO accounts(id,display_name) VALUES($1,'date fixture')", [
+    user,
+  ]);
+  const warn = t.mock.method(console, "warn", () => {});
+  await runAsUser(user, async () => {
+    const saved = [];
+    for (let i = 0; i < 3; i++)
+      saved.push(
+        (
+          await saveEntry({
+            ...blankEntry("job"),
+            title: `Private title ${i}`,
+            appointments: [
+              { id: "stage", title: "Private stage", type: "assessment", startsAt: "" },
+            ],
+          })
+        ).entry,
+      );
+    await pool.query(
+      "UPDATE entries SET data=jsonb_set(data,'{appointments,0,endsAt}', '\"\"'::jsonb) WHERE id=$1",
+      [saved[1].id],
+    );
+    const compatible = await listEntries();
+    assert.equal(compatible.length, 3);
+    assert(compatible.every((entry) => entry.appointments[0].endsAt === undefined));
+    await pool.query(
+      "UPDATE entries SET data=jsonb_set(data,'{appointments,0,endsAt}', '\"invalid-private-date\"'::jsonb) WHERE id=$1",
+      [saved[2].id],
+    );
+    const before = (
+      await pool.query("SELECT data,revision FROM entries WHERE id=$1", [saved[2].id])
+    ).rows[0];
+    const result = await listSummaries();
+    assert.deepEqual(
+      result.entries.map((entry) => entry.id).sort(),
+      [saved[0].id, saved[1].id].sort(),
+    );
+    assert.deepEqual(result.entryReadIssues, [
+      { id: saved[2].id, paths: ["appointments.0.endsAt"] },
+    ]);
+    await assert.rejects(listEntries(), /记录校验失败/);
+    assert.deepEqual(
+      (await pool.query("SELECT data,revision FROM entries WHERE id=$1", [saved[2].id])).rows[0],
+      before,
+    );
+    const logged = JSON.stringify(warn.mock.calls.map((call) => call.arguments));
+    assert(logged.includes(saved[2].id));
+    assert(logged.includes("appointments.0.endsAt"));
+    assert(!logged.includes("Private") && !logged.includes("invalid-private-date"));
   });
 });
