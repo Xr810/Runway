@@ -10,6 +10,13 @@ const rawPool = (globalDb.opportunityPool ??= new Pool({
   max: 5,
   connectionTimeoutMillis: 5000,
   idleTimeoutMillis: 30000,
+}).on("connect", (client) => {
+  // The pool only handles idle-client errors. Keep a listener for the client's
+  // entire lifetime, including checkout and RESET, without releasing it early:
+  // the caller still owns cleanup and query/transaction failures must propagate.
+  client.on("error", (error: Error & { code?: string }) => {
+    console.error("PostgreSQL connection failed", error.code ?? "CONNECTION_ERROR");
+  });
 }));
 rawPool.on("error", () => console.error("PostgreSQL idle connection failed"));
 

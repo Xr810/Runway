@@ -59,6 +59,7 @@ try {
       "tests/backup.test.ts",
       "tests/agent-transaction.test.ts",
       "tests/entry-read.test.ts",
+      "tests/postgres-disconnect.test.ts",
     ],
     env,
   );
