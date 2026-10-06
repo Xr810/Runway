@@ -126,6 +126,7 @@ export default function EntryDetail() {
     copy = kindCopy[entry?.kind ?? "job"];
   const effective = entry ? effectiveFollowUp(entry, data.reminderPreferences) : null;
   const followUp = isJob ? effective?.date || "" : entry?.followUp || "";
+  const TextContainer = isJob ? "details" : "div";
   async function changeStatus(status: string) {
     if (!entry || status === entry.status) return;
     setBusy(true);
@@ -257,7 +258,7 @@ export default function EntryDetail() {
                 <div className="border-b px-6">
                   <TabsList variant="line" className="h-10">
                     <TabsTrigger value="overview">概览</TabsTrigger>
-                    <TabsTrigger value="text">{copy.text}</TabsTrigger>
+                    <TabsTrigger value="text">{isJob ? "摘要" : copy.text}</TabsTrigger>
                     {isJob ? (
                       <TabsTrigger value="evaluation">评估</TabsTrigger>
                     ) : (
@@ -478,60 +479,89 @@ export default function EntryDetail() {
                     )}
                   </TabsContent>
                   <TabsContent value="text" className="flex flex-col gap-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Pill
-                        tone={
-                          entry.jdStatus === "complete"
-                            ? "green"
-                            : entry.jdStatus === "partial"
-                              ? "amber"
-                              : "gray"
-                        }
-                      >
-                        {jdLabel(entry)}
-                      </Pill>
-                      {entry.jd && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="ml-auto"
-                          onClick={() =>
-                            download(
-                              new Blob([entry.title + "\n" + entry.url + "\n\n" + entry.jd], {
-                                type: "text/plain;charset=utf-8",
-                              }),
-                              entry.title + ".txt",
-                            )
-                          }
-                        >
-                          <Download />
-                          下载
-                        </Button>
+                    {isJob && (
+                      <Section title="摘要">
+                        <p className="text-sm leading-7 whitespace-pre-wrap break-words">
+                          {entry.summary || "暂无摘要，可在编辑中补充。"}
+                        </p>
+                      </Section>
+                    )}
+                    <TextContainer className={isJob ? "rounded-lg border bg-card" : "contents"}>
+                      {isJob && (
+                        <summary className="cursor-pointer px-4 py-3 text-sm">
+                          JD 原文{!selectedLoading && !entry.jd ? "（暂无）" : ""}
+                        </summary>
                       )}
-                    </div>
-                    {selectedLoading ? (
-                      <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-                        <Spinner className="size-4 animate-spin" />
-                        正在读取全文…
-                      </p>
-                    ) : entry.jd ? (
-                      <article className="rounded-xl border bg-card px-5 py-4 text-sm leading-7 whitespace-pre-wrap">
-                        {entry.jd}
-                      </article>
-                    ) : (
-                      <EmptyState
-                        icon={<FileText />}
-                        title={"还没有" + copy.text}
-                        description={copy.textHint}
-                        action={
-                          <Button size="sm" variant="outline" onClick={() => editEntry(entry)}>
+                      <div className={isJob ? "flex flex-col gap-4 border-t p-4" : "contents"}>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Pill
+                            tone={
+                              entry.jdStatus === "complete"
+                                ? "green"
+                                : entry.jdStatus === "partial"
+                                  ? "amber"
+                                  : "gray"
+                            }
+                          >
+                            {jdLabel(entry)}
+                          </Pill>
+                          {entry.jd && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="ml-auto"
+                              onClick={() =>
+                                download(
+                                  new Blob([entry.title + "\n" + entry.url + "\n\n" + entry.jd], {
+                                    type: "text/plain;charset=utf-8",
+                                  }),
+                                  entry.title + ".txt",
+                                )
+                              }
+                            >
+                              <Download />
+                              下载
+                            </Button>
+                          )}
+                        </div>
+                        {selectedLoading ? (
+                          <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+                            <Spinner className="size-4 animate-spin" />
+                            正在读取全文…
+                          </p>
+                        ) : entry.jd ? (
+                          <article className="rounded-xl border bg-card px-5 py-4 text-sm leading-7 whitespace-pre-wrap break-words">
+                            {entry.jd}
+                          </article>
+                        ) : isJob ? (
+                          <p className="text-sm text-muted-foreground">暂无 JD 原文。</p>
+                        ) : (
+                          <EmptyState
+                            icon={<FileText />}
+                            title={"还没有" + copy.text}
+                            description={copy.textHint}
+                            action={
+                              <Button size="sm" variant="outline" onClick={() => editEntry(entry)}>
+                                <Pencil />
+                                编辑
+                              </Button>
+                            }
+                          />
+                        )}
+                        {isJob && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="self-start"
+                            onClick={() => editEntry(entry)}
+                          >
                             <Pencil />
                             编辑
                           </Button>
-                        }
-                      />
-                    )}
-                    {entry.summary && (
+                        )}
+                      </div>
+                    </TextContainer>
+                    {!isJob && entry.summary && (
                       <details open={!entry.jd} className="rounded-lg border bg-card">
                         <summary className="cursor-pointer px-3 py-2.5 text-xs text-muted-foreground">
                           摘要 / 摘录
