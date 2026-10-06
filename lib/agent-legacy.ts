@@ -1,16 +1,11 @@
 import type { AgentDraft, AgentSnapshot } from "./agent-contract";
 import type { AiReply } from "./ai-contract";
-import { changes, prepareAgentActions } from "./agent-contract";
-import { draftCommand, type AgentCommand } from "./agent-commands";
+import { changes, prepareAgentActions, createAgentDraft } from "./agent-contract";
+import { draftCommand } from "./agent-commands";
 /** Compatibility only: all generations end up in the same persisted operation registry. */
 export function centralizeReply(reply: AiReply, s: AgentSnapshot): AiReply {
   const actions: AgentDraft[] = [...(reply.actions ?? [])];
-  const draft = (
-    title: string,
-    command: AgentCommand,
-    body: unknown,
-    diff: AgentDraft["changes"] = [],
-  ): AgentDraft => ({ id: crypto.randomUUID(), title, command, body, changes: diff });
+  const draft = createAgentDraft;
   for (const d of reply.drafts)
     actions.push({
       ...draft(

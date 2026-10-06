@@ -1,5 +1,4 @@
-import { createHash } from "node:crypto";
-import { z } from "zod";
+import type { z } from "zod";
 import { atomicAgentWrite } from "./postgres";
 import { type AgentDraft } from "./agent-contract";
 import { saveEntry, deleteEntry, undeleteEntry, listEntries } from "./entries";
@@ -7,20 +6,18 @@ import { saveGig, listGigs } from "./part-time";
 import { saveWatch } from "./watch-storage";
 import { saveReminder, deleteReminder, markReminder } from "./reminders";
 import { saveDirectory } from "./directory-storage";
-import { directorySchema, identity } from "./journey";
-import { watchSchema } from "./watches";
-import { entrySchema } from "./model";
-import { gigSchema } from "./part-time-contract";
+import { identity } from "./journey";
 import { lockEnrichment, saveEvaluationProfile, syncEnrichment } from "./enrichment";
-import { targetSchema } from "./enrichment-contract";
 import { scanSettings, saveScanSettings } from "./scanner";
 import { getAiConfig, saveAiConfig } from "./ai-config";
 import { markNotifications, notify } from "./notifications";
-import { localFiles } from "./files";
-import { validImageData, type aiImageSchema } from "./ai-contract";
+import type { aiImageSchema } from "./ai-contract";
+import { uploadAttachment } from "./attachments";
+import { prepareAgentAttachments } from "./agent-attachments";
 import type { AgentOutcome, AgentDecision } from "./agent-runtime-contract";
 import { draftCommand, isAgentJob } from "./agent-commands";
 import { agentPolicy, assertAgentCommand } from "./agent-policy";
+import { parseAgentOperation } from "./agent-payload";
 
 export async function executeAgentDraft(
   runId: string,
@@ -31,6 +28,8 @@ export async function executeAgentDraft(
   const command = draftCommand(draft);
   // Re-read grants at execution, including checkpoint replay; planning is not authorization.
   if (decision.approved) assertAgentCommand(agentPolicy(await getAiConfig()), command);
+  let sourceFiles: ReturnType<typeof prepareAgentAttachments> | undefined;
+  const created = new Date().toISOString();
   return atomicAgentWrite(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [draft.id]);
     const existing = (
@@ -43,10 +42,11 @@ export async function executeAgentDraft(
     let result: unknown = null,
       status: AgentOutcome["status"] = "rejected";
     if (decision.approved) {
-      const body = draft.body as Record<string, unknown>;
+      // Completed receipts and rejections do not need to reinterpret old payloads.
+      const { command: action, body } = parseAgentOperation(command, draft.body);
       if (draft.warnings?.length && !decision.allowDuplicate)
         throw Error("请先核对可能重复的记录并勾选确认。");
-      if (isAgentJob(command)) {
+      if (isAgentJob(action)) {
         await client.query("INSERT INTO agent_jobs(id,run_id,kind,payload) VALUES($1,$2,$3,$4)", [
           draft.id,
           runId,
@@ -56,10 +56,10 @@ export async function executeAgentDraft(
         result = { jobId: draft.id };
         status = "queued";
       } else {
-        switch (command) {
+        switch (action) {
           case "entries": {
             if (body.action === "save") {
-              const entry = entrySchema.parse(body.entry);
+              const entry = body.entry;
               if (
                 !entry.revision &&
                 !decision.allowDuplicate &&
@@ -72,33 +72,14 @@ export async function executeAgentDraft(
                 )
               )
                 throw Error("发现重复记录，请核对后重新提案。");
+              // Prepare once, but only after receipt/permission checks. Never
+              // require old image inputs to return a completed operation receipt.
+              sourceFiles ??= prepareAgentAttachments(draft.id, draft.sourceImageIds ?? [], images);
               result = await saveEntry(entry);
-              for (const imageId of draft.sourceImageIds ?? []) {
-                const image = images.find((i) => i.id === imageId);
-                if (!image || !validImageData(image.dataUrl))
-                  throw Error("来源截图缺失，请重新发送截图后生成提案。");
-                const mime = image.dataUrl.slice(5, image.dataUrl.indexOf(";"));
-                const bytes = Buffer.from(image.dataUrl.split(",")[1], "base64");
-                const fileId =
-                  "ag_" +
-                  createHash("sha256")
-                    .update(draft.id + ":" + image.id)
-                    .digest("hex");
-                await localFiles.put(fileId, new Blob([new Uint8Array(bytes)]).stream());
-                await client.query(
-                  "INSERT INTO files(id,entry_id,name,type,size,created) VALUES($1,$2,$3,$4,$5,now()) ON CONFLICT(id) DO NOTHING",
-                  [
-                    fileId,
-                    entry.id,
-                    image.name.replace(/\.[^.]+$/, "") +
-                      (mime === "image/jpeg" ? ".jpg" : mime === "image/png" ? ".png" : ".webp"),
-                    mime,
-                    bytes.length,
-                  ],
-                );
-              }
+              for (const source of sourceFiles)
+                await uploadAttachment(source.id, entry.id, source.file, created);
             } else if (body.action === "delete") {
-              await deleteEntry(z.string().parse(body.id), z.number().parse(body.revision));
+              await deleteEntry(body.id, body.revision);
               result = { deleted: body.id };
             } else if (body.action === "undelete") {
               const row = (
@@ -109,14 +90,14 @@ export async function executeAgentDraft(
               ).rows[0];
               if (!row || row.revision !== body.revision)
                 throw Error("回收站记录已变化，请重新提案。");
-              await undeleteEntry(z.string().parse(body.id));
+              await undeleteEntry(body.id);
               result = { restored: body.id };
             } else throw Error("不支持的记录操作");
             await syncEnrichment();
             break;
           }
           case "gigs": {
-            const item = gigSchema.parse(body),
+            const item = body,
               current = await listGigs();
             const old = current.find((g) => g.id === item.id);
             const duplicate =
@@ -143,14 +124,11 @@ export async function executeAgentDraft(
             break;
           }
           case "directory":
-            result = await saveDirectory(directorySchema.parse(body.directory));
+            result = await saveDirectory(body.directory);
             await syncEnrichment();
             break;
           case "watches":
-            result = await saveWatch(
-              watchSchema.parse(body.watch),
-              body.action === "delete" ? "delete" : "save",
-            );
+            result = await saveWatch(body.watch, body.action === "delete" ? "delete" : "save");
             await syncEnrichment();
             break;
           case "reminders":
@@ -162,13 +140,8 @@ export async function executeAgentDraft(
                 ])
               ).rows[0];
               if (!old || old.revision !== body.revision) throw Error("提醒已更新，请重新提案。");
-              if (body.action === "delete") await deleteReminder(z.string().parse(body.id));
-              else if (body.action === "done")
-                await markReminder(
-                  z.string().parse(body.id),
-                  z.string().date().parse(body.day),
-                  z.boolean().parse(body.done),
-                );
+              if (body.action === "delete") await deleteReminder(body.id);
+              else if (body.action === "done") await markReminder(body.id, body.day, body.done);
               else throw Error("不支持的提醒操作");
               result = { ok: true };
             }
@@ -177,10 +150,7 @@ export async function executeAgentDraft(
             result = await saveEvaluationProfile(body.profile);
             break;
           case "evaluation":
-            result = await lockEnrichment(
-              targetSchema.parse(body.target),
-              z.boolean().parse(body.locked),
-            );
+            result = await lockEnrichment(body.target, body.locked);
             break;
           case "scanSettings":
             if (JSON.stringify(await scanSettings()) !== JSON.stringify(body.before))
@@ -191,22 +161,16 @@ export async function executeAgentDraft(
             const current = await getAiConfig();
             if (current.revision !== body.revision || current.base !== body.base)
               throw Error("模型设置已更新，请重新提案。");
-            const config = await saveAiConfig(
-              { ...current, model: z.string().min(1).max(250).parse(body.model) },
-              current.revision,
-            );
+            const config = await saveAiConfig({ ...current, model: body.model }, current.revision);
             result = { model: config.model, revision: config.revision };
             break;
           }
           case "notifications":
-            await markNotifications(
-              z.enum(["read", "dismiss"]).parse(body.action),
-              z.array(z.string().uuid()).parse(body.ids),
-            );
+            await markNotifications(body.action, body.ids);
             result = { ok: true };
             break;
           default: {
-            const unhandled: never = command;
+            const unhandled: never = action;
             throw Error(`不支持的站内操作：${unhandled}`);
           }
         }

@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -71,6 +72,8 @@ type Ctx = {
   loading: boolean;
   error: string;
   reload: () => Promise<void>;
+  refreshAfterWrite: () => Promise<boolean>;
+  acceptDirectory: (directory: Directory) => void;
   saveEntry: (entry: Entry) => Promise<Entry>;
   patchEntry: (entry: Pick<Entry, "id" | "revision">, patch: Partial<Entry>) => Promise<Entry>;
   removeEntry: (entry: Pick<Entry, "id" | "revision" | "title">) => Promise<void>;
@@ -114,11 +117,16 @@ export function DeskProvider({ children }: { children: ReactNode }) {
     [returnTo, setReturnTo] = useState<string | null>(null);
   const [evaluation, openEvaluation] = useState<EnrichmentTarget | null>(null);
   const [brandLogos, setBrandLogos] = useState<Record<string, string>>({});
+  const refreshVersion = useRef(0);
+  const active = useRef(true);
 
-  const reload = useCallback(async () => {
+  const refresh = useCallback(async function refreshDesk(afterWrite = false) {
+    if (!active.current) return false;
+    const version = ++refreshVersion.current;
     try {
       setError("");
       const next = await fetchDesk();
+      if (!active.current || version !== refreshVersion.current) return false;
       setData(next);
       try {
         const feed = await readJson<{
@@ -132,31 +140,68 @@ export function DeskProvider({ children }: { children: ReactNode }) {
         for (const state of feed.states)
           if (state.result?.kind === "brand" && state.result.assetUrl)
             logos[state.kind + ":" + state.target_id] = state.result.assetUrl;
-        setBrandLogos(logos);
+        if (active.current && version === refreshVersion.current) setBrandLogos(logos);
       } catch {
         /* the main desk data is still usable when enrichment is briefly unavailable */
       }
+      return true;
     } catch (e) {
-      setError((e as Error).message);
+      if (!active.current || version !== refreshVersion.current) return false;
+      const message = afterWrite ? "已保存，但刷新失败；无需重复提交。" : (e as Error).message;
+      setError(message);
+      if (afterWrite)
+        toast.warning(message, {
+          duration: 12000,
+          action: {
+            label: "重试刷新",
+            onClick: () => {
+              void refreshDesk();
+            },
+          },
+        });
+      return false;
     } finally {
-      setLoading(false);
+      if (active.current && version === refreshVersion.current) setLoading(false);
     }
   }, []);
+  const reload = useCallback(async () => {
+    await refresh();
+  }, [refresh]);
+  const refreshAfterWrite = useCallback(() => refresh(true), [refresh]);
   useEffect(() => {
-    let active = true;
-    fetchDesk()
-      .then((d) => {
-        if (active) setData(d);
-      })
-      .catch((e) => {
-        if (active) setError((e as Error).message);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    active.current = true;
+    void reload();
     return () => {
-      active = false;
+      active.current = false;
     };
+  }, [reload]);
+
+  const acceptEntry = useCallback((entry: Entry) => {
+    if (!active.current) return;
+    refreshVersion.current++;
+    setData((current) => {
+      const old = current.entries.find((item) => item.id === entry.id);
+      if (old && old.revision > entry.revision) return current;
+      const summary = { ...entry, jd: "", jdChars: entry.jd.length };
+      return {
+        ...current,
+        entries: old
+          ? current.entries.map((item) => (item.id === entry.id ? summary : item))
+          : [summary, ...current.entries],
+      };
+    });
+    setDetail((current) =>
+      current?.entry.id === entry.id && current.entry.revision <= entry.revision
+        ? { ...current, entry }
+        : current,
+    );
+  }, []);
+  const acceptDirectory = useCallback((directory: Directory) => {
+    if (!active.current) return;
+    refreshVersion.current++;
+    setData((current) =>
+      directory.revision >= current.directory.revision ? { ...current, directory } : current,
+    );
   }, []);
 
   // Full record for the open detail sheet, refetched whenever the list shows a newer revision.
@@ -181,47 +226,21 @@ export function DeskProvider({ children }: { children: ReactNode }) {
     };
   }, [selectedId, summary, detail]);
 
-  // Brand icons cached by the enrichment pipeline; loaded once so list rows can show logos.
-  useEffect(() => {
-    let active = true;
-    fetch("/api/enrichment", { cache: "no-store" })
-      .then((r) =>
-        readJson<{
-          states: {
-            kind: string;
-            target_id: string;
-            result: { kind: string; assetUrl?: string } | null;
-          }[];
-        }>(r),
-      )
-      .then((feed) => {
-        if (!active) return;
-        const logos: Record<string, string> = {};
-        for (const s of feed.states)
-          if (s.result?.kind === "brand" && s.result.assetUrl)
-            logos[s.kind + ":" + s.target_id] = s.result.assetUrl;
-        setBrandLogos(logos);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, []);
-
   const saveEntry = useCallback(
     async (entry: Entry) => {
       const check = entrySchema.safeParse(entry);
       if (!check.success) throw Error(check.error.issues[0].message);
       const r = await postJson<{ entry: Entry }>("/api/desk", { action: "save", entry });
-      await reload();
+      acceptEntry(r.entry);
+      await refreshAfterWrite();
       return r.entry;
     },
-    [reload],
+    [acceptEntry, refreshAfterWrite],
   );
   const patchEntry = useCallback(
     async (entry: Pick<Entry, "id" | "revision">, patch: Partial<Entry>) => {
       try {
-        return (
+        const saved = (
           await postJson<{ entry: Entry }>("/api/desk", {
             action: "patch",
             id: entry.id,
@@ -229,11 +248,15 @@ export function DeskProvider({ children }: { children: ReactNode }) {
             patch,
           })
         ).entry;
-      } finally {
+        acceptEntry(saved);
+        await refreshAfterWrite();
+        return saved;
+      } catch (error) {
         await reload();
+        throw error;
       }
     },
-    [reload],
+    [acceptEntry, refreshAfterWrite, reload],
   );
   const removeEntry = useCallback(
     async (entry: Pick<Entry, "id" | "revision" | "title">) => {
@@ -310,6 +333,8 @@ export function DeskProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       reload,
+      refreshAfterWrite,
+      acceptDirectory,
       saveEntry,
       patchEntry,
       removeEntry,
@@ -342,6 +367,8 @@ export function DeskProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       reload,
+      refreshAfterWrite,
+      acceptDirectory,
       saveEntry,
       patchEntry,
       removeEntry,

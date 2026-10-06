@@ -1,10 +1,12 @@
 import { z } from "zod";
 import {
   entryObject,
+  entryAgentFieldSchema,
   entrySchema,
   blankEntry,
   defaultJobDeadline,
   defaultNextAction,
+  withStatusNextAction,
   today,
   type Entry,
 } from "./model";
@@ -22,6 +24,13 @@ import { watchSchema, blankWatch, type CompanyWatch } from "./watches";
 import { reminderSchema, type Reminder } from "./reminder-schema";
 import { profileSchema, targetSchema, type EvaluationProfile } from "./enrichment-contract";
 import type { AgentCommand, AgentDestination } from "./agent-commands";
+import {
+  parseAgentOperation,
+  scanFields,
+  type AgentOperation,
+  type AgentPayloads,
+} from "./agent-payload";
+export { scanFields } from "./agent-payload";
 
 const id = z.string().min(1).max(2000);
 const fields = z.record(z.unknown());
@@ -156,6 +165,15 @@ export type AgentDraft = AgentDestination & {
   sourceImageIds?: string[];
   warnings?: string[];
 };
+/** New proposals are typed; old persisted drafts remain unknown until execution. */
+export function createAgentDraft<C extends AgentCommand>(
+  title: string,
+  command: C,
+  body: AgentPayloads[NoInfer<C>],
+  changes: AgentDraft["changes"] = [],
+): AgentOperation & Pick<AgentDraft, "id" | "title" | "changes"> {
+  return { id: crypto.randomUUID(), title, ...parseAgentOperation(command, body), changes };
+}
 export type AgentSnapshot = {
   entries: Entry[];
   deleted: Entry[];
@@ -168,17 +186,7 @@ export type AgentSnapshot = {
   ai: { base: string; model: string; revision: number };
   versions?: { id: string; entry_id: string; data: string }[];
 };
-export const scanFields = z
-  .object({
-    enabled: z.boolean(),
-    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-    maxAddPerWatch: z.number().int().min(1).max(20),
-  })
-  .strict();
-export const entryAgentFields = entryObject
-  .omit({ id: true, revision: true, jdSavedAt: true })
-  .partial()
-  .strict();
+export const entryAgentFields = entryAgentFieldSchema;
 function requireItem<T>(item: T | undefined): T {
   if (!item) throw Error("AI 指定的记录不存在，请重新选择目标。");
   return item;
@@ -213,12 +221,7 @@ export function prepareAgentActions(raw: unknown[], s: AgentSnapshot): AgentDraf
     ].join(":");
     if (touched.has(key)) throw Error("AI 对同一记录提出了多份操作，请合并修改或分次确认。");
     touched.add(key);
-    const draft = (
-      title: string,
-      command: AgentCommand,
-      body: unknown,
-      diff: AgentDraft["changes"] = [],
-    ): AgentDraft => ({ id: crypto.randomUUID(), title, command, body, changes: diff });
+    const draft = createAgentDraft;
     if (a.module === "entry") {
       if (a.operation === "add") {
         const patch = entryAgentFields.parse(a.fields);
@@ -260,12 +263,7 @@ export function prepareAgentActions(raw: unknown[], s: AgentSnapshot): AgentDraf
           },
         );
       const patch = entryAgentFields.parse(a.fields);
-      // A job whose status changes without an explicit next action follows the same
-      // linkage as manual edits; closed stages clear the stale action (#18).
-      const effective =
-        old.kind === "job" && patch.status !== undefined && patch.nextAction === undefined
-          ? { ...patch, nextAction: defaultNextAction(patch.status) }
-          : patch;
+      const effective = withStatusNextAction(old.kind, patch);
       const next = entrySchema.parse({ ...old, ...effective });
       return {
         ...draft(

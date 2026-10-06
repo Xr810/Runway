@@ -13,6 +13,7 @@ import { loadModule } from "../helpers/load-module";
 import { runModelGraph } from "../../lib/agent-model-loop";
 import { z } from "zod";
 import { isAgentJob, agentJobCommands } from "../../lib/agent-commands";
+import { parseAgentOperation } from "../../lib/agent-payload";
 
 test("legacy destinations distinguish jobs from settings; ambiguous commands fail closed", () => {
   assert.equal(draftCommand({ path: "/api/scan", body: { action: "run" } }), "scan");
@@ -185,7 +186,10 @@ test("execution rechecks live grants and legacy replay reuses the same receipt",
       },
       "./files": {},
       "./ai-contract": {},
+      "./attachments": {},
+      "./agent-attachments": {},
       "./agent-commands": { draftCommand, isAgentJob },
+      "./agent-payload": { parseAgentOperation },
       "./agent-policy": { agentPolicy, assertAgentCommand },
     },
   );
@@ -207,12 +211,26 @@ test("execution rechecks live grants and legacy replay reuses the same receipt",
   );
   assert.deepEqual(first, replay);
   assert.equal(mutations, 1);
+  assert.deepEqual(await executeAgentDraft("run", { ...draft, body: null }, decision), first);
+  await assert.rejects(
+    executeAgentDraft(
+      "run",
+      { ...draft, id: crypto.randomUUID(), body: { action: "read", ids: "wrong" } },
+      decision,
+    ),
+  );
+  assert.equal(mutations, 1, "invalid payloads must fail before business writes");
+  const beforeRevocation = transactions;
   enabled = false;
   await assert.rejects(
     executeAgentDraft("run", { ...draft, id: crypto.randomUUID() }, decision),
     /权限/,
   );
-  assert.equal(transactions, 2, "revoked permission must fail before opening a write transaction");
+  assert.equal(
+    transactions,
+    beforeRevocation,
+    "revoked permission must fail before opening a write transaction",
+  );
   assert.equal(mutations, 1);
 });
 
@@ -242,6 +260,7 @@ test("queued work checks permissions at dispatch rather than trusting prior appr
         },
       },
       "./agent-commands": { agentJobCommands },
+      "./agent-payload": { parseAgentOperation },
       "./agent-policy": { agentPolicy, assertAgentCommand },
       "./ai-config": { getAiConfig: async () => ({ enabled, mode: "personal" }) },
       "./postgres": {

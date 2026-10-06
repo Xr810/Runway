@@ -5,10 +5,10 @@ import { completeCompanies } from "./company-complete";
 import { startBuiltinEnrichment, waitBuiltinEnrichment } from "./builtin-enrichment";
 import { generateBrief } from "./brief";
 import { z } from "zod";
-import { targetSchema } from "./enrichment-contract";
 import { agentJobCommands } from "./agent-commands";
 import { agentPolicy, assertAgentCommand } from "./agent-policy";
 import { getAiConfig } from "./ai-config";
+import { parseAgentOperation } from "./agent-payload";
 const runtime = globalThis as unknown as {
   runwayAgentJobs?: boolean;
   runwayAgentTimer?: NodeJS.Timeout;
@@ -42,31 +42,27 @@ export async function runAgentJobs() {
             job.id,
           ]);
           try {
-            const command = z.enum(agentJobCommands).parse(job.kind);
+            const { command, body } = parseAgentOperation(
+              z.enum(agentJobCommands).parse(job.kind),
+              job.payload,
+            );
             assertAgentCommand(agentPolicy(await getAiConfig()), command);
             let result: unknown;
             switch (command) {
               case "scan":
-                result = await runScan(
-                  "manual",
-                  z.array(z.string()).optional().parse(job.payload.watchIds),
-                );
+                result = await runScan("manual", body.watchIds);
                 break;
               case "companyCompletion":
                 result = await completeCompanies({
-                  names: z.array(z.string()).optional().parse(job.payload.names),
-                  refreshLogo: !!job.payload.refreshLogo,
+                  names: body.names,
+                  refreshLogo: body.refreshLogo,
                   force: true,
                   limit: 20,
                 });
                 break;
               case "assessment": {
-                const target = targetSchema.optional().parse(job.payload.target);
-                const started = await startBuiltinEnrichment(
-                  z.enum(["job", "brand", "all"]).parse(job.payload.scope),
-                  target,
-                  !!job.payload.force,
-                );
+                const target = body.target;
+                const started = await startBuiltinEnrichment(body.scope, target, body.force);
                 await waitBuiltinEnrichment();
                 const tasks = (await enrichmentFeed(target)).tasks.filter((t) =>
                   started.taskIds.includes(t.id),
