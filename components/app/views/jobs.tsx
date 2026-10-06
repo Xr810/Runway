@@ -28,6 +28,11 @@ import {
 } from "@/lib/model";
 import { matchesAiFilter } from "@/lib/ai-contract";
 import { isApplied } from "@/lib/journey";
+import {
+  effectiveFollowUp,
+  defaultReminderPreferences,
+  type ReminderPreferences,
+} from "@/lib/recruiting-reminders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -86,11 +91,12 @@ const rank = (p: string) => (({ 高: 0, 中: 1, 低: 2 }) as Record<string, numb
 
 /** The date that matters next for this record: the nearest upcoming deadline or follow-up. */
 /** Once a job is applied to, its application deadline no longer matters; only follow-ups do. */
-export function keyDate(e: Entry) {
+export function keyDate(e: Entry, preferences: ReminderPreferences = defaultReminderPreferences) {
   const deadline = e.kind === "job" && isApplied(e) ? "" : e.deadline;
+  const followUp = e.kind === "job" ? effectiveFollowUp(e, preferences)?.date || "" : e.followUp;
   const upcoming = [
     { date: deadline, kind: "截止" },
-    { date: e.followUp, kind: "跟进" },
+    { date: followUp, kind: "跟进" },
   ]
     .filter((d) => d.date && dayDiff(d.date) >= 0)
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -98,8 +104,8 @@ export function keyDate(e: Entry) {
     upcoming[0] ??
     (deadline
       ? { date: deadline, kind: "截止" }
-      : e.followUp
-        ? { date: e.followUp, kind: "跟进" }
+      : followUp
+        ? { date: followUp, kind: "跟进" }
         : null)
   );
 }
@@ -181,7 +187,9 @@ export default function JobsView() {
         sort === "score"
           ? (score(b, weights) ?? -1) - (score(a, weights) ?? -1)
           : sort === "deadline"
-            ? (keyDate(a)?.date || "9999").localeCompare(keyDate(b)?.date || "9999")
+            ? (keyDate(a, data.reminderPreferences)?.date || "9999").localeCompare(
+                keyDate(b, data.reminderPreferences)?.date || "9999",
+              )
             : sort === "company"
               ? a.organization.localeCompare(b.organization)
               : sort === "updated"
@@ -189,7 +197,7 @@ export default function JobsView() {
                 : rank(a.priority) - rank(b.priority) ||
                   (a.deadline || "9999").localeCompare(b.deadline || "9999"),
       );
-  }, [base, stage, sort, layout, data.entries, weights]);
+  }, [base, stage, sort, layout, data.entries, data.reminderPreferences, weights]);
   const activeFilters = attributes.filter((a) => filters[a.key]).length;
 
   return (
@@ -513,6 +521,7 @@ function JobTable({
   logoFor: (name: string) => string;
   weights?: Parameters<typeof score>[1];
 }) {
+  const { data } = useDesk();
   return (
     <>
       <div className="hidden overflow-hidden rounded-xl border bg-card md:block">
@@ -531,7 +540,7 @@ function JobTable({
           </thead>
           <tbody>
             {entries.map((e) => {
-              const k = keyDate(e);
+              const k = keyDate(e, data.reminderPreferences);
               return (
                 <tr
                   key={e.id}
@@ -597,7 +606,7 @@ function JobTable({
       </div>
       <ul className="flex flex-col gap-2 md:hidden">
         {entries.map((e) => {
-          const k = keyDate(e);
+          const k = keyDate(e, data.reminderPreferences);
           return (
             <li key={e.id}>
               <button
@@ -649,7 +658,7 @@ function Board({
   entries: Entry[];
   stages: readonly (typeof jobStages)[number][];
 }) {
-  const { openEntry, logoFor } = useDesk();
+  const { openEntry, logoFor, data } = useDesk();
   return (
     <div className="-mx-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6 md:-mx-8 md:px-8">
       <div className="grid auto-cols-[minmax(232px,1fr)] grid-flow-col gap-3">
@@ -667,7 +676,7 @@ function Board({
               </header>
               <div className="flex flex-col gap-2">
                 {items.map((e) => {
-                  const k = keyDate(e);
+                  const k = keyDate(e, data.reminderPreferences);
                   return (
                     <button
                       key={e.id}

@@ -9,6 +9,7 @@ import {
 import { blankEntry, entrySchema } from "../../lib/model";
 import {
   defaultReminderPreferences,
+  effectiveFollowUp,
   reminderPreferencesSchema,
   recruitingReminders,
 } from "../../lib/recruiting-reminders";
@@ -66,7 +67,8 @@ test("manual follow-up, offer, next stage, response and cancellation suppress au
   entry.status = "一面";
   entry.appointments = [stage({ status: "completed", completedAt: "2026-09-10T02:00:00Z" })];
   entry.followUp = "2026-09-18";
-  assert.equal(recruitingReminders([entry]).length, 0);
+  assert.equal(recruitingReminders([entry])[0].date, "2026-09-18");
+  assert.equal(recruitingReminders([entry])[0].source, "manual");
   entry.followUp = "";
   entry.status = "Offer";
   assert.equal(recruitingReminders([entry]).length, 0);
@@ -240,4 +242,48 @@ test("assessment plans use configurable calendar days without changing feedback 
       false,
     );
   assert.equal(item.deadlineDate, "");
+});
+
+test("effective follow-up unifies stage dates, overrides, clearing and preference changes", () => {
+  const entry = job();
+  entry.status = "笔试";
+  entry.appointments = [
+    stage({
+      type: "assessment",
+      startsAt: "",
+      status: "completed",
+      completedAt: "2026-09-30T00:00:00+08:00",
+    }),
+  ];
+  assert.equal(effectiveFollowUp(entry)?.date, "2026-10-07");
+  assert.equal(effectiveFollowUp(entry)?.source, "automatic");
+  assert.equal(entry.followUp, "");
+  const prefs = reminderPreferencesSchema.parse({
+    assessment: { ...defaultReminderPreferences.assessment, days: 9 },
+  });
+  assert.equal(effectiveFollowUp(entry, prefs)?.date, "2026-10-09");
+  entry.appointments[0].completedAt = "2026-09-29T00:00:00+08:00";
+  assert.equal(effectiveFollowUp(entry, prefs)?.date, "2026-10-08");
+  entry.followUp = "2026-10-11";
+  const manual = effectiveFollowUp(entry, prefs)!;
+  assert.equal(manual.appointmentId, "round-1");
+  assert.equal(manual.date, "2026-10-11");
+  assert.equal(stageProgress(entry.appointments[0], "2026-10-02", manual.date).percent, 25);
+  const events = timelineEvents([entry], prefs).filter((e) => e.type === "followup");
+  assert.equal(events.length, 1);
+  assert.equal(events[0].date, "2026-10-11");
+  entry.followUp = "";
+  assert.equal(effectiveFollowUp(entry, prefs)?.date, "2026-10-08");
+  entry.appointments[0].remindersEnabled = false;
+  assert.equal(effectiveFollowUp(entry, prefs), null);
+  entry.appointments[0].remindersEnabled = null;
+  for (const response of ["advanced", "rejected"] as const) {
+    entry.appointments[0].response = response;
+    assert.equal(effectiveFollowUp(entry), null);
+  }
+  entry.appointments[0].response = "pending";
+  for (const status of ["Offer", "未通过", "放弃"]) {
+    entry.status = status;
+    assert.equal(effectiveFollowUp(entry), null);
+  }
 });

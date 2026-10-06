@@ -108,7 +108,7 @@ export function timelineEvents(
             entry.kind === "job" ? "投递截止" : entry.kind === "project" ? "项目目标" : "比赛截止",
           type: "deadline",
         },
-        { date: entry.followUp, label: "跟进", type: "followup" },
+        { date: entry.kind === "job" ? "" : entry.followUp, label: "跟进", type: "followup" },
         {
           date:
             typeof entry.extra["面试 / 测评时间"] === "string"
@@ -151,7 +151,7 @@ export function timelineEvents(
         id: item.id,
         date: item.date,
         time: "",
-        label: "无反馈跟进",
+        label: item.source === "manual" ? "手动跟进" : "无反馈跟进",
         type: "followup",
         detail: item.title,
         entry,

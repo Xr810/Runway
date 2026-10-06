@@ -13,6 +13,7 @@ import { today } from "./model";
 import { aiReplySchema } from "./ai-contract";
 import { getReminderPreferences } from "./reminder-preferences";
 import { timelineEvents } from "./journey";
+import { effectiveFollowUp } from "./recruiting-reminders";
 
 export async function loadAgentSnapshot(
   base: Omit<AgentSnapshot, "deleted" | "directory" | "scanSettings">,
@@ -46,6 +47,7 @@ export async function readAgentData(raw: AgentRead, s: AgentSnapshot) {
       const preferences = await getReminderPreferences();
       value = s.entries.map((entry) => ({
         ...entry,
+        effectiveFollowUp: effectiveFollowUp(entry, preferences),
         derivedSchedule: timelineEvents([entry], preferences).map(
           ({ id, date, time, label, type, detail }) => ({ id, date, time, label, type, detail }),
         ),

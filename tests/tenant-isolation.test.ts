@@ -278,6 +278,43 @@ test("recruiting dispatch deduplicates concurrent runs and withdraws stale notic
     ]),
   );
   assert(notice.rows[0].dismissed_at && notice.rows[0].read_at);
+  assert.equal((await dispatchRecruitingRemindersForUser(accountA, "2026-10-03")).created, 1);
+  const manual = (
+    await as(accountA, () =>
+      pool.query(
+        "SELECT summary FROM notifications WHERE recruiting_key=$1 AND dismissed_at IS NULL",
+        [`manual:${entry.id}`],
+      ),
+    )
+  ).rows;
+  assert.equal(manual.length, 1);
+  assert.match(manual[0].summary, /手动/);
+  const current = await as(accountA, () => entries.getEntry(entry.id));
+  await as(accountA, () => entries.patchEntry(entry.id, current!.revision, { followUp: "" }));
+  const resumed = await Promise.all([
+    dispatchRecruitingRemindersForUser(accountA, "2026-10-03"),
+    dispatchRecruitingRemindersForUser(accountA, "2026-10-03"),
+  ]);
+  assert.equal(
+    resumed.reduce((sum, item) => sum + item.created, 0),
+    1,
+  );
+  const active = (
+    await as(accountA, () =>
+      pool.query(
+        "SELECT recruiting_key FROM notifications WHERE entry_id=$1 AND dismissed_at IS NULL",
+        [entry.id],
+      ),
+    )
+  ).rows;
+  assert.deepEqual(
+    active.map((row) => row.recruiting_key),
+    [`application:${entry.id}`],
+  );
+  await assert.rejects(
+    as(accountA, () => entries.patchEntry(entry.id, saved.revision, { followUp: "2026-10-10" })),
+    /已更新/,
+  );
 });
 
 test("AI enablement and personal settings are enforced per user", async () => {

@@ -287,7 +287,15 @@ export default function EntryEditor() {
                   onChange={(e) => set("deadline", e.target.value)}
                 />
               </Field>
-              <Field label={copy.followUp + "日期"} htmlFor="f-follow">
+              <Field
+                label={isJob ? "手动跟进日期（覆盖自动）" : copy.followUp + "日期"}
+                htmlFor="f-follow"
+                hint={
+                  isJob
+                    ? "留空或清除后恢复按招聘阶段和提醒设置自动计算；无需另填自动日期。手动安排不会随阶段自动清除。"
+                    : undefined
+                }
+              >
                 <Input
                   id="f-follow"
                   type="date"

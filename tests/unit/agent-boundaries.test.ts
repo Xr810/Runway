@@ -16,7 +16,7 @@ import { isAgentJob, agentJobCommands } from "../../lib/agent-commands";
 import { parseAgentOperation } from "../../lib/agent-payload";
 import { blankEntry } from "../../lib/model";
 import { appointmentSchema } from "../../lib/appointments";
-import { defaultReminderPreferences } from "../../lib/recruiting-reminders";
+import { defaultReminderPreferences, effectiveFollowUp } from "../../lib/recruiting-reminders";
 import { timelineEvents } from "../../lib/journey";
 
 test("legacy destinations distinguish jobs from settings; ambiguous commands fail closed", () => {
@@ -102,6 +102,7 @@ test("planning does not fetch all history and restore hydration reads only reque
         }),
       },
       "./journey": { timelineEvents },
+      "./recruiting-reminders": { effectiveFollowUp },
       "./ai-contract": { aiReplySchema },
     },
   );
@@ -152,6 +153,18 @@ test("planning does not fetch all history and restore hydration reads only reque
   assert.equal(read.derivedSchedule[0].label, "测评计划期限");
   assert.equal(snapshot.entries[0].appointments[0].deadlineDate, "");
   assert.equal("derivedSchedule" in snapshot.entries[0], false);
+  snapshot.entries[0].appointments[0] = {
+    ...snapshot.entries[0].appointments[0],
+    status: "completed",
+    completedAt: "2026-09-30T00:00:00+08:00",
+  };
+  const completed = (await context.readAgentData(
+    { module: "entries", id: "assessment-job", offset: 0 },
+    snapshot,
+  )) as { effectiveFollowUp: { date: string; source: string } };
+  assert.equal(completed.effectiveFollowUp.date, "2026-10-07");
+  assert.equal(completed.effectiveFollowUp.source, "automatic");
+  assert.equal(snapshot.entries[0].followUp, "");
 });
 
 test("async proposal preparation is awaited and failures enter the bounded repair loop", async () => {

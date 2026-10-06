@@ -79,7 +79,7 @@ export default function TodayView() {
     (e) => ["interview", "assessment"].includes(e.type) && dayDiff(e.date) >= 0,
   ).length;
   const overdue = open
-    .filter((e) => e.followUp && dayDiff(e.followUp) < 0)
+    .filter((e) => e.kind !== "job" && e.followUp && dayDiff(e.followUp) < 0)
     .map((e) => ({ entry: e, reason: `跟进日期已过 ${-dayDiff(e.followUp)} 天` }));
   const missed = jobs
     .filter((e) => e.status === "待投递" && e.deadline && dayDiff(e.deadline) < 0)

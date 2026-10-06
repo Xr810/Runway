@@ -19,7 +19,7 @@ import {
 import { toast } from "sonner";
 import { type Entry, score, statusesFor } from "@/lib/model";
 import { appointmentDate, appointmentTime, stageDueDate, stageProgress } from "@/lib/appointments";
-import { recruitingReminders } from "@/lib/recruiting-reminders";
+import { effectiveFollowUp } from "@/lib/recruiting-reminders";
 import { today } from "@/lib/model";
 import { Button } from "@/components/ui/button";
 import {
@@ -124,6 +124,8 @@ export default function EntryDetail() {
   const uploadRef = useRef<HTMLInputElement>(null);
   const isJob = entry?.kind === "job",
     copy = kindCopy[entry?.kind ?? "job"];
+  const effective = entry ? effectiveFollowUp(entry, data.reminderPreferences) : null;
+  const followUp = isJob ? effective?.date || "" : entry?.followUp || "";
   async function changeStatus(status: string) {
     if (!entry || status === entry.status) return;
     setBusy(true);
@@ -276,13 +278,13 @@ export default function EntryDetail() {
                 </div>
                 <div className="px-6 py-6">
                   <TabsContent value="overview" className="flex flex-col gap-7">
-                    {(entry.nextAction || entry.followUp) && (
+                    {(entry.nextAction || followUp) && (
                       <div className="rounded-xl border border-primary/20 bg-accent/60 px-4 py-3">
                         <p className="text-xs font-medium text-accent-foreground/80">下一步</p>
                         <p className="mt-0.5 text-sm font-medium">{entry.nextAction || "跟进"}</p>
-                        {entry.followUp && (
+                        {followUp && (
                           <p className="mt-1 text-xs text-muted-foreground">
-                            计划 {formatDay(entry.followUp)} · {relativeDay(entry.followUp)}
+                            计划 {formatDay(followUp)} · {relativeDay(followUp)}
                           </p>
                         )}
                       </div>
@@ -292,19 +294,33 @@ export default function EntryDetail() {
                         label={entry.kind === "project" ? "目标日期" : "截止日期"}
                         value={entry.deadline}
                       />
-                      <DateCell label={copy.followUp + "日期"} value={entry.followUp} />
+                      <DateCell
+                        label={
+                          copy.followUp +
+                          "日期" +
+                          (effective
+                            ? effective.source === "manual"
+                              ? "（手动）"
+                              : "（自动）"
+                            : "")
+                        }
+                        value={followUp}
+                      />
                       <DateCell label={copy.applied + "日期"} value={entry.applied} />
                     </div>
+                    {isJob && !effective && (
+                      <p className="text-xs text-muted-foreground">
+                        暂无可计算的跟进日期：请核对阶段日期、反馈状态及提醒设置，或设置手动跟进。自动跟进不会从缺失日期推算。
+                      </p>
+                    )}
                     {entry.appointments.length > 0 && (
                       <Section title="面试与笔试">
                         <ul className="flex flex-col gap-2">
                           {entry.appointments
                             .toSorted((a, b) => a.startsAt.localeCompare(b.startsAt))
                             .map((item) => {
-                              const due = recruitingReminders(
-                                  [entry],
-                                  data.reminderPreferences,
-                                ).find((reminder) => reminder.appointmentId === item.id)?.date,
+                              const due =
+                                  effective?.appointmentId === item.id ? effective.date : undefined,
                                 progress = stageProgress(
                                   item,
                                   today(),
