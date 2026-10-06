@@ -155,6 +155,7 @@ export const agentActionSchema = z.discriminatedUnion("module", [
     })
     .strict(),
   z.object({ module: z.literal("brief"), operation: z.literal("refresh") }).strict(),
+  z.object({ module: z.literal("jdSummary"), operation: z.literal("run"), targetId: id }).strict(),
 ]);
 export type AgentAction = z.infer<typeof agentActionSchema>;
 export type AgentDraft = AgentDestination & {
@@ -577,6 +578,11 @@ export function prepareAgentActions(raw: unknown[], s: AgentSnapshot): AgentDraf
       );
     }
     if (a.module === "brief") return draft("刷新今日简报", "brief", {});
+    if (a.module === "jdSummary") {
+      const entry = requireItem(s.entries.find((e) => e.id === a.targetId && e.kind === "job"));
+      if (!entry.jd.trim()) throw Error("请先保存 JD 原文，再整理摘要。");
+      return draft("整理 JD 摘要：" + entry.title, "jdSummary", { entryId: entry.id });
+    }
     const unhandled: never = a.module;
     throw Error(`未实现的 AI 操作：${JSON.stringify(unhandled)}`);
   });

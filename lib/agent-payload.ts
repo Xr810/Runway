@@ -68,6 +68,7 @@ export const agentPayloadSchemas = {
     force: z.boolean().default(false),
   }),
   brief: z.object({}),
+  jdSummary: z.object({ entryId: id }),
 } satisfies Record<AgentCommand, z.ZodTypeAny>;
 
 export type AgentPayloads = { [K in AgentCommand]: z.input<(typeof agentPayloadSchemas)[K]> };

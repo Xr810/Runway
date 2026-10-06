@@ -300,6 +300,7 @@ test("queued work checks permissions at dispatch rather than trusting prior appr
       "./scanner": {},
       "./company-complete": {},
       "./builtin-enrichment": {},
+      "./jd-summary-service": { processJdSummaries: async () => {} },
       "./enrichment-contract": {},
       "./brief": {
         generateBrief: async () => {

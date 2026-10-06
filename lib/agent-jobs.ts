@@ -9,6 +9,7 @@ import { agentJobCommands } from "./agent-commands";
 import { agentPolicy, assertAgentCommand } from "./agent-policy";
 import { getAiConfig } from "./ai-config";
 import { parseAgentOperation } from "./agent-payload";
+import { generateJdSummary, processJdSummaries } from "./jd-summary-service";
 const runtime = globalThis as unknown as {
   runwayAgentJobs?: boolean;
   runwayAgentTimer?: NodeJS.Timeout;
@@ -78,6 +79,11 @@ export async function runAgentJobs() {
               case "brief":
                 result = await generateBrief();
                 break;
+              case "jdSummary":
+                result = await generateJdSummary(body.entryId);
+                if ((result as { status: string }).status !== "completed")
+                  throw Error("摘要尚未完成，请查看岗位摘要状态并重试。");
+                break;
               default: {
                 const unhandled: never = command;
                 throw Error(`未知任务类型：${unhandled}`);
@@ -94,6 +100,7 @@ export async function runAgentJobs() {
             );
           }
         }
+        await processJdSummaries().catch(() => console.error("JD summary worker failed"));
       });
   } finally {
     if (locked) await client.query("SELECT pg_advisory_unlock(28402032)").catch(() => {});

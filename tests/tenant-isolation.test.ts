@@ -30,6 +30,65 @@ await controlPool.query("INSERT INTO accounts(id,display_name) VALUES($1,$3),($2
   `${prefix}-b`,
 ]);
 
+test("derived JD summaries are isolated, deduplicated and do not write application progress", async () => {
+  const { loadModule } = await import("./helpers/load-module");
+  const contract = await import("../lib/jd-summary");
+  const policy = await import("../lib/agent-policy");
+  const { jd, summary } = await import("./fixtures/jd-summary");
+  let calls = 0;
+  const service = loadModule<typeof import("../lib/jd-summary-service")>(
+    new URL("../lib/jd-summary-service.ts", import.meta.url),
+    {
+      "node:crypto": await import("node:crypto"),
+      "./jd-summary": contract,
+      "./agent-policy": policy,
+      "./entries": entries,
+      "./postgres": postgres,
+      "./ai-config": {
+        getAiConfig: async () => ({
+          enabled: true,
+          base: "fixture",
+          key: "fixture",
+          model: "fixture",
+        }),
+      },
+      "./ai-client": {
+        aiJson: async () => {
+          calls++;
+          await new Promise((resolve) => setTimeout(resolve, 40));
+          return summary;
+        },
+      },
+    },
+  );
+  const entry = (
+    await as(accountA, () =>
+      entries.saveEntry({
+        ...blankEntry("job"),
+        title: "Summary fixture",
+        jd,
+        status: "二面",
+        applied: "2026-10-01",
+      }),
+    )
+  ).entry;
+  await Promise.all([
+    as(accountA, () => service.generateJdSummary(entry.id)),
+    as(accountA, () => service.generateJdSummary(entry.id)),
+  ]);
+  assert.equal(calls, 1);
+  assert.deepEqual((await as(accountA, () => service.readJdSummary(entry.id))).summary, summary);
+  assert.deepEqual(await as(accountA, () => entries.getEntry(entry.id)), entry);
+  assert.deepEqual(await as(accountB, () => service.readJdSummary(entry.id)), {
+    status: "missing",
+  });
+  await assert.rejects(
+    as(accountB, () => service.generateJdSummary(entry.id)),
+    /不存在/,
+  );
+  assert.equal(calls, 1);
+});
+
 after(async () => {
   // Only rows owned by these disposable accounts are removed. RLS is deliberately
   // kept active during cleanup so a typo cannot delete another test's fixtures.

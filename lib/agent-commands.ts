@@ -13,6 +13,7 @@ export const agentCommands = [
   "scan",
   "companyCompletion",
   "assessment",
+  "jdSummary",
   "brief",
 ] as const;
 export type AgentCommand = (typeof agentCommands)[number];
@@ -76,7 +77,13 @@ export function draftCommand(draft: AgentDestination & { body: unknown }): Agent
   throw Error("不支持的旧版 AI 操作，请重新生成提案。");
 }
 
-export const agentJobCommands = ["scan", "companyCompletion", "assessment", "brief"] as const;
+export const agentJobCommands = [
+  "scan",
+  "companyCompletion",
+  "assessment",
+  "jdSummary",
+  "brief",
+] as const;
 export type AgentJobCommand = (typeof agentJobCommands)[number];
 export function isAgentJob(command: AgentCommand): command is AgentJobCommand {
   return agentJobCommands.some((job) => job === command);

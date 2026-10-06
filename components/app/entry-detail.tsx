@@ -53,6 +53,7 @@ import {
 import { KindIcon } from "./views/projects";
 import { EvaluationTimeline, useEnrichment } from "./evaluation";
 import ProgressDialog, { newProgress, type ProgressDraft } from "./progress-dialog";
+import { JdSummary } from "./jd-summary";
 
 function download(blob: Blob, name: string) {
   const u = URL.createObjectURL(blob),
@@ -481,9 +482,11 @@ export default function EntryDetail() {
                   <TabsContent value="text" className="flex flex-col gap-4">
                     {isJob && (
                       <Section title="摘要">
-                        <p className="text-sm leading-7 whitespace-pre-wrap break-words">
-                          {entry.summary || "暂无摘要，可在编辑中补充。"}
-                        </p>
+                        <JdSummary
+                          key={`${entry.id}:${entry.revision}`}
+                          entryId={entry.id}
+                          fallback={entry.summary}
+                        />
                       </Section>
                     )}
                     <TextContainer className={isJob ? "rounded-lg border bg-card" : "contents"}>

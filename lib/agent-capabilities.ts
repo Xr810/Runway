@@ -30,6 +30,7 @@ export const commandForModule = {
   scan: "scan",
   companyCompletion: "companyCompletion",
   assessment: "assessment",
+  jdSummary: "jdSummary",
   brief: "brief",
 } satisfies Record<AgentAction["module"], AgentCommand>;
 
@@ -66,6 +67,7 @@ const labels: Record<string, string> = {
   scan: "招聘扫描",
   companyCompletion: "公司资料补全",
   assessment: "内置评估",
+  jdSummary: "整理 JD 摘要",
   version: "历史正文恢复",
 };
 const values = (s: z.ZodTypeAny): string[] =>
@@ -101,6 +103,7 @@ entry的kind为job/project/competition。日期YYYY-MM-DD。appointments/progres
 appointment: title,type(interview/assessment/followup),startsAt/endsAt(ISO时间含时区),location,url,status(scheduled/completed/cancelled)。progress: date,text,minutes,track,milestone，仅项目和比赛可用。
 招聘日期使用读取结果中的 derivedSchedule。测评无公司截止日期时，应用按通知日期加用户设置的自然日天数推导计划（默认3天，设置读取 recruiting.assessment.planDays）；计划不是公司截止日期，不回写 deadlineDate，也不替代完成后无反馈提醒。缺少通知日期时询问，不推测日期。
 跟进使用 effectiveFollowUp 的日期、来源和阶段；followUp 只代表用户明确指定的手动覆盖。只更新完成时间、反馈等阶段事实即可自动联动，不把自动日期复制到 followUp。用户取消手动覆盖时才将 followUp 清空；同一条记录的相关事实合在一次更新内。
+用户粘贴/导入 JD 时完整保留 jd；更新已有岗位前读取并复用真实 ID，不能重复新建。JD 保存后系统自动整理来源可核对的中文分区摘要；也可对已保存 JD 使用 jdSummary run、targetId=岗位ID。摘要与原文、实际申请进度分开，通用招聘流程不能改写 status/applied/appointments；缺失或含糊的事实向用户询问，不能推测覆盖已确认字段。
 gig新增/更新可用顶层payments数组同时新增收入（每项amountMinor,currency,status,date,period,note；不传id）。已有收入的修改/作废/恢复用payment。payment 的targetId为兼职ID，itemId为已有收入ID；amountMinor是主货币金额乘100的整数（JPY也乘100），币种HKD/USD/CNY/SGD/EUR/GBP/JPY，status pending/received，date必填。只有明确收款事实/待收款记录才记账，不从报酬约定推断。缺币种、日期、状态时询问。用void作废，不删除账目。archived用于兼职归档/恢复。
 reminder add/update的schedule：once={type:"once",date:"YYYY-MM-DD",time:"HH:MM或空"}，daily={type:"daily",time:"08:00",until:""}，weekly={type:"weekly",days:[1,2,3,4,5],time:"",until:""}；done用fields:{day:"YYYY-MM-DD",done:true}。
 scan run可传watchIds数组；省略表示全部启用关注，不能把无效ID改成全部。companyCompletion run可传names、refreshLogo；图标错误时refreshLogo=true。assessment run传scope(job/brand/all)、可选target:{kind,id}、force；只有明确全部重评才force=true。evaluation lock传target:{kind,id},locked。notifications read/dismiss传真实ids数组。version restore传targetId(记录ID)、itemId(真实历史版本ID)。brief refresh没有fields。
