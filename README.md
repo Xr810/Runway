@@ -1,33 +1,33 @@
 # Runway
 
-**把求职、项目、比赛和兼职收入放在一个地方管理，配合需要确认才能执行变更的 AI 助手。**
+**Manage job applications, projects, competitions, and part-time income in one place, with an AI assistant that asks for confirmation before applying changes.**
 
-Runway 是以中文界面为主的自托管 Web 应用：记录机会、跟进招聘阶段、安排面试和提醒，也可以让助手从岗位链接、文字或截图中整理信息、评估岗位及补全公司资料。每个账号拥有独立的个人工作区，**不提供团队共享或协作记录**。
+Runway is a self-hosted web application with a primarily Chinese interface. Track opportunities, recruiting stages, interviews, and reminders; ask the assistant to extract information from job links, text, or screenshots, assess opportunities, and fill in company details. Each account has an isolated personal workspace. **There are no shared records or team workspaces.**
 
 Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · PostgreSQL 17 · LangGraph
 
-[快速开始](#快速开始) · [部署](deploy/README.md) · [AI 开发与任务交接](AGENTS.md) · [安全说明](SECURITY.md)
+[Quick start](#quick-start) · [Deployment](deploy/README.md) · [AI development and handoff](AGENTS.md) · [Security](SECURITY.md)
 
-## 能做什么
+## Features
 
-| 模块       | 用途                                                     |
-| ---------- | -------------------------------------------------------- |
-| 今日与日程 | 查看待办、提醒、招聘节点和面试安排                       |
-| 岗位       | 管理投递状态、招聘阶段、JD、附件和岗位评估               |
-| 项目与比赛 | 跟踪求职以外的机会、进度和截止日期                       |
-| 兼职与收入 | 记录兼职工作和收入                                       |
-| 公司与关注 | 管理公司资料、招聘来源；启用自动化后按配置时间扫描机会   |
-| 洞察       | 汇总记录与评估结果，辅助选择优先级                       |
-| AI 助手    | 读取上下文、整理信息、提出变更，确认后执行或提交后台任务 |
-| 设置与数据 | 个人背景、简历、AI 配置、集成、回收站和备份恢复          |
+| Module                    | Purpose                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Today and schedule        | Review tasks, reminders, recruiting milestones, and interviews                                         |
+| Jobs                      | Track applications, recruiting stages, job descriptions, attachments, and assessments                  |
+| Projects and competitions | Track other opportunities, progress, and deadlines                                                     |
+| Part-time work and income | Record part-time work and earnings                                                                     |
+| Companies and watches     | Manage company information and recruiting sources; scan at configured times when automation is enabled |
+| Insights                  | Summarize records and assessments to help prioritize opportunities                                     |
+| AI assistant              | Read context, organize information, propose changes, and execute or queue work after confirmation      |
+| Settings and data         | Manage personal background, CV, AI settings, integrations, recycle bin, and backup/restore             |
 
-AI 是可选能力，不是手动管理记录的前提。链接读取受来源网站限制，评估与补全结果需要人工核对。后台自动化需要配置模型、启用相应功能并运行调度器，不保证任意招聘网站都能抓取。
+AI is optional: manual record management does not require it. Link extraction depends on the source website, and generated assessments and company details need human review. Background automation requires model configuration, the relevant features enabled, and a running scheduler. Not every recruiting website can be scraped.
 
-## 快速开始
+## Quick start
 
-需要 **Node.js ≥ 22.13、npm、PostgreSQL 17**。
+Requirements: **Node.js ≥ 22.13, npm, and PostgreSQL 17**.
 
-### 1. 安装并准备配置
+### 1. Install and configure
 
 ```sh
 git clone https://github.com/Xr810/Runway.git
@@ -36,88 +36,88 @@ npm ci
 cp .env.example .env.local
 ```
 
-创建一个专用空数据库，将连接串填入 `.env.local` 的 `DATABASE_URL`。数据库角色应拥有应用 schema，但**不能是 superuser，也不能有 `BYPASSRLS`**，否则会绕过行级安全隔离。已有旧版业务数据的数据库可能被多账号迁移拒绝；不要直接套用到生产库。
+Create a dedicated, empty database and set `DATABASE_URL` in `.env.local`. Its role should own the application schema but **must not be a superuser or have `BYPASSRLS`**, which would bypass row-level security. The multi-account migration may refuse databases containing legacy business records; do not apply these instructions directly to production data.
 
-分别运行两次下面的命令，为 `SESSION_SECRET` 和 `AI_SETTINGS_KEY` 生成不同的随机值，只写入本地配置：
+Run the following command twice to generate independent values for `SESSION_SECRET` and `AI_SETTINGS_KEY`. Store them only in your local configuration:
 
 ```sh
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
-主要配置如下；完整变量见 [`.env.example`](.env.example)。
+Key settings are listed below. See [`.env.example`](.env.example) for the full configuration.
 
-| 变量              | 说明                                                 |
-| ----------------- | ---------------------------------------------------- |
-| `DATABASE_URL`    | PostgreSQL 连接串                                    |
-| `APP_ORIGIN`      | 应用实际访问来源，须包含协议及必要的端口             |
-| `SESSION_SECRET`  | 独立随机会话密钥，至少 32 字符                       |
-| `AI_SETTINGS_KEY` | 独立随机 AI 配置加密密钥，至少 32 字符；需妥善保存   |
-| `ATTACHMENTS_DIR` | 附件目录，默认开发配置为 `./data/attachments`        |
-| `SCHEDULER`       | 开发保持 `off`；同时关闭定时调度和 agent 后台 worker |
-| `AI_MODE`         | 默认 `personal`；也支持部署方统一配置的 `managed`    |
+| Variable          | Purpose                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`    | PostgreSQL connection string                                                                      |
+| `APP_ORIGIN`      | Actual application origin, including protocol and port where needed                               |
+| `SESSION_SECRET`  | Independent random session secret, at least 32 characters                                         |
+| `AI_SETTINGS_KEY` | Independent random AI-settings encryption key, at least 32 characters; retain it securely         |
+| `ATTACHMENTS_DIR` | Attachment storage; the development example uses `./data/attachments`                             |
+| `SCHEDULER`       | Keep `off` during development; disables both scheduled automation and the agent background worker |
+| `AI_MODE`         | Defaults to `personal`; `managed` uses deployment-owned configuration                             |
 
-### 2. 迁移并启动
+### 2. Migrate and start
 
-确认连接的是自己的开发数据库后运行：
+After confirming that the connection points to your development database:
 
 ```sh
 node --env-file=.env.local scripts/migrate.mjs
 npm run dev
 ```
 
-在本机浏览器打开开发服务器输出的地址，使用邮箱与密码注册，密码至少 10 字符。**普通 `npm run dev` / `npm start` 不自动迁移；Docker 容器启动会先执行迁移。**
+Open the address printed by the development server in your local browser, then register with an email address and a password of at least 10 characters. **`npm run dev` and `npm start` do not run migrations automatically; Docker container startup does.**
 
-如果在 Amp orb 中开发，仓库提供 [`.agents/setup`](.agents/setup) 和 [服务配置](.amp/services.yaml)。环境准备完成后运行 `amp orb services ensure`，使用它返回的 Portal 链接。该环境专为可丢弃的开发数据配置，不要用于生产。
+For development in an Amp orb, the repository provides [`.agents/setup`](.agents/setup) and a [service configuration](.amp/services.yaml). Once the environment is ready, run `amp orb services ensure` and use the returned Portal link. This setup is intended for disposable development data, not production.
 
-### 3. 按需启用 AI 与登录方式
+### 3. Enable optional AI and sign-in providers
 
-- **个人模式（`personal`）**：在设置中填写兼容的模型端点、模型名和 API key；可另配 Tavily 搜索 key。不会回退使用部署方的 AI 密钥。
-- **托管模式（`managed`）**：仅使用部署环境中的 `AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL` 和 `TAVILY_API_KEY`；用户不能查看、修改或测试这些凭据。
-- 两种模式均受账号的 `ai_enabled` 服务端权限控制。调用 AI／搜索时，相关内容会发送到所配置的服务商，请先确认其隐私政策。
-- Google 登录可选：设置 `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`，并授权 `${APP_ORIGIN}/api/auth/google/callback` 回调地址。
+- **Personal mode (`personal`):** configure a compatible model endpoint, model name, and API key in Settings, with an optional Tavily search key. Deployment AI credentials are never used as a fallback.
+- **Managed mode (`managed`):** uses only the deployment's `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, and `TAVILY_API_KEY`. Users cannot view, edit, or test those credentials.
+- Both modes respect the account's server-side `ai_enabled` permission. AI and search features send relevant content to the configured providers; review their privacy policies first.
+- Google sign-in is optional. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and authorize `${APP_ORIGIN}/api/auth/google/callback` as the redirect URI.
 
-当前**没有邮箱验证和密码找回**。Google 身份与同邮箱密码账号不会自动合并。产品日期和调度使用固定的 `Asia/Hong_Kong` 时区（UTC+8），并非浏览器本地时区。
+**Email verification and password recovery are not implemented.** Google identities and password accounts with matching email addresses are not linked automatically. Product dates and schedules use the fixed `Asia/Hong_Kong` timezone (UTC+8), not the browser's local timezone.
 
-## 部署与数据安全
+## Deployment and data safety
 
-使用根目录 `Dockerfile` 构建，具体步骤和升级约束见 [部署文档](deploy/README.md)。生产部署需要 HTTPS、独立数据库、持久化附件目录，以及数据库和文件的配套备份。
+Build with the root `Dockerfile`; see the [deployment guide](deploy/README.md) for instructions and upgrade constraints. Production requires HTTPS, a dedicated database, persistent attachment storage, and coordinated backups of the database and files.
 
-- 容器启动会执行所有待处理迁移；升级前先备份并验证恢复，不能把“启动容器”当成无数据库副作用的操作。
-- 完整导出包含回收站、附件和简历。恢复会校验文件，数据库写入在单个事务中执行，保留已有记录和设置，并支持失败后重试。
-- 数据库与文件系统不构成同一个原子事务；恢复失败可能留下不可通过应用访问的文件残留，不能承诺零残留。
-- 不要提交环境密钥、简历、附件或数据库导出。漏洞报告方式与安全边界见 [SECURITY.md](SECURITY.md)。
+- Container startup applies all pending migrations. Back up and test restoration before upgrading; starting a container is not a database-side-effect-free operation.
+- Full exports include the recycle bin, attachments, and CV. Restore validates files and performs database writes in a single transaction, preserves existing records and settings, and supports retry after failure.
+- The database and filesystem do not share an atomic transaction. A failed restore may leave file remnants that cannot be accessed through the application; zero residue is not guaranteed.
+- Never commit environment secrets, CVs, attachments, or database exports. See [SECURITY.md](SECURITY.md) for security boundaries and vulnerability reporting.
 
-## 代码导航
+## Code navigation
 
-| 路径                  | 职责                                                    |
-| --------------------- | ------------------------------------------------------- |
-| `app/(app)/`          | 登录后的页面与布局                                      |
-| `app/api/`            | HTTP 接口；`integrations/v1` 为 Muse 集成 API           |
-| `components/app/`     | 业务 UI、记录 Store、独立 Context 与助手会话生命周期    |
-| `components/ui/`      | shadcn/ui 基础组件                                      |
-| `lib/`                | 记录、附件、备份、扫描、AI 工作流、权限和调度等领域逻辑 |
-| `scripts/migrations/` | 按编号执行的数据库迁移                                  |
-| `tests/`              | 单元、数据库、API 测试及确定性模拟模型                  |
-| `deploy/`             | 部署说明                                                |
+| Path                  | Responsibility                                                                                      |
+| --------------------- | --------------------------------------------------------------------------------------------------- |
+| `app/(app)/`          | Authenticated pages and layouts                                                                     |
+| `app/api/`            | HTTP routes; `integrations/v1` is the Muse integration API                                          |
+| `components/app/`     | Business UI, record store, separate contexts, and assistant conversation lifecycle                  |
+| `components/ui/`      | shadcn/ui primitives                                                                                |
+| `lib/`                | Domain logic for records, attachments, backups, scanning, AI workflows, permissions, and scheduling |
+| `scripts/migrations/` | Numbered database migrations                                                                        |
+| `tests/`              | Unit, database, and API tests, plus a deterministic mock model                                      |
+| `deploy/`             | Deployment documentation                                                                            |
 
-业务请求经 API 进入领域模块，再访问账号隔离的 PostgreSQL 和文件存储。AI 通过“规划 → 提案 → 用户确认 → 执行”复用这些领域模块；LangGraph 负责持久工作流与恢复，不替代业务接口或权限校验。详细维护约束见 [AGENTS.md](AGENTS.md)。
+Business requests pass through API routes and domain modules to account-isolated PostgreSQL and file storage. The AI assistant reuses those modules through a **plan → propose → confirm → execute** flow. LangGraph manages durable workflows and recovery; it does not replace business interfaces or authorization. See [AGENTS.md](AGENTS.md) for maintenance constraints.
 
-## 开发与验证
+## Development and verification
 
 ```sh
-npm test                 # tests/unit/*.test.ts，不包含数据库/API 集成测试
+npm test                 # tests/unit/*.test.ts only; excludes database/API integration tests
 npm run lint
 npx tsc --noEmit
 npm run build
 npm run format:check -- README.md AGENTS.md
 ```
 
-只格式化本次改动的文件：`npm run format -- <paths>`。数据库测试 `npm run test:db` 与 API 测试 `npm run test:api` **只能针对一次性测试数据库和附件目录**；它们会创建、修改和删除数据。环境加载、模拟模型以及其他集成测试的注意事项见 [AGENTS.md](AGENTS.md#验证规则)。
+Format only changed files with `npm run format -- <paths>`. Database tests (`npm run test:db`) and API tests (`npm run test:api`) **must use disposable test databases and attachment directories**: they create, modify, and delete data. See [AGENTS.md](AGENTS.md#verification) for environment loading, mock-model setup, and other integration-test precautions.
 
-## 当前版本与边界
+## Current version and limitations
 
-当前版本为 **0.1.0**，设置中的「Runway 0.1.0」入口可查看更新日志，版本号读取自 `package.json`。本版加入公司所属国家／地区与公司介绍，加强附件并发发布和备份恢复；不再生成或显示新的 JD 原文历史及保存时间，保留旧历史兼容。
+The current version is **0.1.0**. The “Runway 0.1.0” entry in Settings displays release notes; the version comes from `package.json`. This version adds company country/region and introduction fields, strengthens concurrent attachment publication and backup recovery, and stops generating or displaying new job-description history and saved timestamps while retaining compatibility with old history.
 
-版本备注为「首个正式上线版本」，**不代表某个部署实例已经过上线验收**。当前没有团队工作区、管理员面板、订阅计费系统或 Gmail/MCP 连接。
+The release note describes this as the “first official release.” **That label is not evidence that a particular deployment has passed production acceptance checks.** Team workspaces, an admin panel, subscriptions/billing, and Gmail/MCP connections are not implemented.
 
-此公开仓库不包含原始导入历史、用户记录、简历、附件、环境文件及私有基础设施脚本。继续开发前请读 [AGENTS.md](AGENTS.md)，并结合 Git 提交记录了解改动原因与未完成事项。
+This public repository excludes the original import history, user records, CVs, attachments, environment files, and private infrastructure scripts. Before continuing development, read [AGENTS.md](AGENTS.md) and the relevant Git history for design rationale and unfinished work.

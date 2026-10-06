@@ -1,83 +1,83 @@
-# Runway：AI 开发与任务交接
+# Runway: AI development and task handoff
 
-本文件适用于整个仓库。面向人的产品介绍、启动说明见 [README.md](README.md)；部署和安全要求分别见 [deploy/README.md](deploy/README.md)、[SECURITY.md](SECURITY.md)。以代码和实际执行结果为准，不把历史交接中的“通过”当成本次验证。
+This file applies to the entire repository. See [README.md](README.md) for the product overview and setup, [deploy/README.md](deploy/README.md) for deployment, and [SECURITY.md](SECURITY.md) for security requirements. Treat source code and actual execution results as authoritative. Historical passing results are not verification of the current changes.
 
-## 开始或恢复任务
+## Starting or resuming a task
 
-1. 阅读用户最新目标、此文件和改动目录内的指导文件。先分清是解释、调查、实现还是发布，不擅自扩大范围。
-2. 运行 `git status --short --branch`、`git diff`、`git diff --cached`，识别已有未提交工作；不要覆盖他人的改动。
-3. 检查 `git rev-parse --is-shallow-repository`；若为 `true`，先 `git fetch --quiet --unshallow origin`，再读历史。网络不可用时说明历史不完整。
-4. 通过 `git log -8`、`git log -- <相关路径>`、`git show <commit>` 追踪原因；优先定位失败测试、领域模块与调用者，不只看界面或提交标题。
-5. 提交中的 `Amp-Thread-ID` 是进一步的讨论、命令和验证证据入口；能访问时再读取。不能访问时依靠提交正文、差异和测试，不假设私有讨论可见。
-6. 说明本次准备改变的行为、必须保留的边界和验证方式，再做最小可验证修改。遇到不确定项，区分事实、假设和建议。
+1. Read the user's latest goal, this file, and guidance in the directories you will change. Determine whether the request is for explanation, investigation, implementation, or delivery; do not expand its scope.
+2. Run `git status --short --branch`, `git diff`, and `git diff --cached` to identify existing work. Do not overwrite someone else's changes.
+3. Check `git rev-parse --is-shallow-repository`. If it returns `true`, run `git fetch --quiet --unshallow origin` before inspecting history. If the network is unavailable, state that the history is incomplete.
+4. Use `git log -8`, `git log -- <relevant-paths>`, and `git show <commit>` to trace the rationale. Inspect failing tests, domain modules, and callers rather than relying on UI behavior or commit titles alone.
+5. An `Amp-Thread-ID` commit trailer links to discussion, commands, and verification evidence. Read it when accessible. Otherwise, rely on commit messages, diffs, and tests; do not assume private discussions are available.
+6. State the intended behavior change, boundaries to preserve, and verification approach, then make the smallest verifiable change. Distinguish facts, assumptions, and recommendations.
 
-## 项目地图与稳定边界
+## Project map and stable boundaries
 
-Runway 是多账号隔离的个人机会管理应用，不是团队协作系统。Node.js ≥22.13、Next.js App Router、React、PostgreSQL 17、LangGraph；使用 npm 和 `package-lock.json`。产品时间遵循 `lib/appointments.ts` 等共享时间工具的 `Asia/Hong_Kong`，不要按开发机器时区重新解释日期。
+Runway is a personal opportunity tracker with isolated accounts, not a team collaboration system. It uses Node.js ≥22.13, Next.js App Router, React, PostgreSQL 17, and LangGraph, with npm and `package-lock.json`. Product time follows the shared `Asia/Hong_Kong` utilities, including `lib/appointments.ts`; do not reinterpret dates in the developer machine's timezone.
 
-| 任务                      | 优先入口                                                                                                     |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| 页面、记录编辑            | `app/(app)/`、`components/app/views/`、`components/app/store.tsx`                                            |
-| 记录、revision 与历史兼容 | `lib/entries.ts`、`lib/model.ts`、`app/api/desk/route.ts`                                                    |
-| 账号与租户隔离            | `lib/auth.ts`、`lib/accounts.ts`、`lib/postgres.ts`、隔离迁移                                                |
-| 附件、简历、备份恢复      | `lib/attachments.ts`、`lib/files.ts`、`lib/cv.ts`、`lib/backup.ts`                                           |
-| 招聘来源、抓取与自动化    | `lib/scanner.ts`、`lib/ats.ts`、`lib/web.ts`、`lib/scheduler.ts`                                             |
-| AI 交互与会话             | `components/app/assistant.tsx`、`use-assistant-conversation.ts`、`assistant-cache.ts`、`assistant-images.ts` |
-| AI 持久工作流             | `lib/agent-runtime.ts`、`agent-graph.ts`、`agent-checkpoint.ts`                                              |
-| 模型、规划与权限          | `lib/ai-provider.ts`、`ai-config.ts`、`agent-planner.ts`、`agent-policy.ts`                                  |
-| 命令与执行                | `lib/agent-contract.ts`、`agent-capabilities.ts`、`agent-executor.ts`、`agent-jobs.ts`                       |
+| Task                                          | Start here                                                                                                   |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Pages and record editing                      | `app/(app)/`, `components/app/views/`, `components/app/store.tsx`                                            |
+| Records, revisions, and history compatibility | `lib/entries.ts`, `lib/model.ts`, `app/api/desk/route.ts`                                                    |
+| Accounts and tenant isolation                 | `lib/auth.ts`, `lib/accounts.ts`, `lib/postgres.ts`, isolation migrations                                    |
+| Attachments, CVs, and backup/restore          | `lib/attachments.ts`, `lib/files.ts`, `lib/cv.ts`, `lib/backup.ts`                                           |
+| Recruiting sources, fetching, and automation  | `lib/scanner.ts`, `lib/ats.ts`, `lib/web.ts`, `lib/scheduler.ts`                                             |
+| Assistant UI and conversations                | `components/app/assistant.tsx`, `use-assistant-conversation.ts`, `assistant-cache.ts`, `assistant-images.ts` |
+| Durable AI workflows                          | `lib/agent-runtime.ts`, `agent-graph.ts`, `agent-checkpoint.ts`                                              |
+| Models, planning, and permissions             | `lib/ai-provider.ts`, `ai-config.ts`, `agent-planner.ts`, `agent-policy.ts`                                  |
+| Commands and execution                        | `lib/agent-contract.ts`, `agent-capabilities.ts`, `agent-executor.ts`, `agent-jobs.ts`                       |
 
-### 数据隔离与副作用
+### Data isolation and side effects
 
-- 业务数据库操作通过 `lib/postgres.ts` 的用户上下文和业务 `pool`；`controlPool` 只用于身份/session/token 查找及后台账号枚举等控制用途，不能作为绕过租户隔离的捷径。
-- 不信任请求中的 owner 或浏览器权限。应用数据库角色不得是 superuser 或具有 `BYPASSRLS`；隔离测试必须能发现越权访问。
-- 保留 revision 冲突检测，不以静默覆盖解决过期编辑。新增迁移放在 `scripts/migrations/`，不要改写已发布迁移来改变现有数据库。
-- `atomicAgentWrite` 的 serializable 事务可能重试。邮件发送等不可逆外部操作不能放在其中；先持久化意图，在事务外调用，并在结果不确定时核对后再重试。
-- 附件发布不能覆盖同路径不同内容。恢复必须保留已有数据、校验附件与简历、覆盖全部回收站记录，并保持失败可重试；文件系统不是数据库事务的一部分。
+- Business database operations use the user context and business `pool` in `lib/postgres.ts`. `controlPool` is for control-plane operations such as identity/session/token lookup and background account enumeration, not a shortcut around tenant isolation.
+- Do not trust an owner supplied in a request or permissions held in browser state. The application database role must not be a superuser or have `BYPASSRLS`; isolation tests must detect unauthorized access.
+- Preserve revision conflict detection. Do not silently overwrite stale edits. Add migrations under `scripts/migrations/`; do not rewrite published migrations to change existing databases.
+- The serializable transaction in `atomicAgentWrite` may retry. Never put irreversible external operations, such as sending email, inside it. Persist intent first, invoke the external service outside the transaction, and reconcile uncertain outcomes before retrying.
+- Attachment publication must not overwrite different content at the same path. Restore must preserve existing data, validate attachments and CVs, include all recycle-bin records, and remain retryable after failure. The filesystem is not part of the database transaction.
 
-### 前端与助手边界
+### Frontend and assistant boundaries
 
-- `useDesk` 负责记录、编辑/选择、评估与图标；`useAssistantPanel`、`useNotifications`、`useReminders`、`useNavigationGuard` 订阅各自 Context。
-- 这些 Provider 必须留在按账号 key 挂载的 `DeskProvider` 内，防止切换账号残留另一账号状态。不要为了便捷重新合并成全局 Store。
-- `assistant.tsx` 负责呈现；`use-assistant-conversation.ts` 负责请求、缓存与轮询生命周期；图片转换和 IndexedDB 访问保持独立。轮询须有界，已结束且没有待返回后台结果的运行应停止跟踪。
-- `agent-runtime.ts` 负责持久运行与 checkpoint 恢复；懒加载的 `agent-planner.ts` 接收已验证请求并返回提案，不直接执行提案。
-- 新能力使用 `AgentCommand`：在 `agent-contract.ts` 定义动作，在 `agent-capabilities.ts` 映射模块，在 `agent-executor.ts` 或 `agent-jobs.ts` 实现，并复用普通 API 的领域 writer。补充穷尽分发和边界测试。
-- `agent-commands.ts` 仍读取旧 HTTP-path 提案；旧 checkpoint 或浏览器缓存可能存在时不能删除兼容适配。
-- 历史列表只读元信息，正文仅在显式版本读取或恢复提案时按需加载，并受已验证动作数量限制。业务 snapshot 是请求级数据，不是跨账号全局缓存。
-- `agent-policy.ts` 是服务端权限来源；生成提案、确认执行和后台任务启动均需检查当时权限。模型/UI 能力过滤不是最终授权。
-- `personal` 不回退到环境 AI 密钥；`managed` 不允许用户查看、修改或测试部署凭据。LangGraph 管工作流，`ai-provider.ts` 管模型协议；换 SDK 不应迫使业务层或 UI 重写。
+- `useDesk` owns records, editing/selection, assessments, and logos. `useAssistantPanel`, `useNotifications`, `useReminders`, and `useNavigationGuard` subscribe to separate contexts.
+- Keep these providers inside the account-keyed `DeskProvider` so switching accounts cannot retain another account's state. Do not merge them back into a global store for convenience.
+- `assistant.tsx` handles presentation; `use-assistant-conversation.ts` owns requests, caching, and polling. Keep image conversion and IndexedDB access separate. Polling must be bounded; stop tracking completed runs unless a background result remains queued.
+- `agent-runtime.ts` owns durable runs and checkpoint recovery. The lazily loaded `agent-planner.ts` accepts validated requests and returns proposals; it does not execute them.
+- New capabilities use `AgentCommand`: define the action in `agent-contract.ts`, map its module in `agent-capabilities.ts`, and handle it in `agent-executor.ts` or `agent-jobs.ts`. Reuse the domain writers used by ordinary APIs. Add exhaustive-dispatch and boundary tests.
+- `agent-commands.ts` still reads legacy HTTP-path proposals. Do not remove this adapter while old checkpoints or browser caches can exist.
+- History lists load metadata only. Load bodies on demand for explicit version reads or restore proposals, bounded by the validated action count. Business snapshots are request-scoped, not cross-account global caches.
+- `agent-policy.ts` is the server-owned permission boundary. Check live permissions when generating proposals, confirming execution, and starting background jobs. Filtering model/UI capabilities is not final authorization.
+- `personal` mode never falls back to environment AI keys. `managed` mode does not let users view, change, or test deployment credentials. LangGraph owns workflow; `ai-provider.ts` owns model protocol. Replacing an SDK should not require rewriting the domain layer or UI.
 
-## 近期演进与设计原因
+## Recent changes and rationale
 
-以下是可从已提交历史追溯的背景，不是未来任务清单，也不是本次重新验证结果。
+The following is background traceable to committed history, not a task backlog or a fresh verification report.
 
-| 变更                                                                                                        | 为什么这样做                                                                    | 继续修改时要保留什么                                                      |
-| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| [助手边界重构](https://github.com/Xr810/Runway/commit/2c0da8707992f198e592875fbb2435be2659a66a)             | 降低前端 Store 耦合；将模型规划、持久工作流和业务执行分开；避免旧提案绕过新权限 | 账号级 Provider、领域命令、执行时权限复查、旧提案兼容、有界历史加载与轮询 |
-| [0.1.0 数据恢复与版本说明](https://github.com/Xr810/Runway/commit/81791ff86d78e28fa03c786e7c31f6d2040ca2bc) | 修复附件并发覆盖、回收站导出遗漏及部分恢复；补充公司字段与版本入口              | 不覆盖附件、完整导出、事务恢复与重试、revision 校验、旧 JD 历史兼容       |
+| Change                                                                                                              | Rationale                                                                                                                                               | Preserve when continuing                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| [Assistant boundary refactor](https://github.com/Xr810/Runway/commit/2c0da8707992f198e592875fbb2435be2659a66a)      | Reduce frontend store coupling; separate model planning, durable workflow, and business execution; prevent old proposals from bypassing new permissions | Account-scoped providers, domain commands, live execution policy, legacy proposal compatibility, bounded history loading and polling       |
+| [0.1.0 recovery and release notes](https://github.com/Xr810/Runway/commit/81791ff86d78e28fa03c786e7c31f6d2040ca2bc) | Fix concurrent attachment overwrites, incomplete recycle-bin exports, and partial restores; add company fields and a version entry                      | No attachment overwrites, complete exports, transactional restore and retry, revision checks, legacy job-description history compatibility |
 
-两次提交的讨论与验证过程见 [原开发线程](https://ampcode.com/threads/T-01a10cd9-e108-763a-bfbb-4df8cd57b92c)。线程可能需要访问权限；上述摘要和 Git 差异应足够作为公开起点。历史验证包括单元测试、TypeScript、ESLint、隔离/备份回归与模拟模型运行恢复；这不是当前分支的测试报告。
+The [original development thread](https://ampcode.com/threads/T-01a10cd9-e108-763a-bfbb-4df8cd57b92c) contains discussion and verification details. It may require access; the summary above and Git diffs should provide a usable public starting point. Historical checks included unit tests, TypeScript, ESLint, isolation/backup regressions, and mock-model run recovery. They are not a test report for the current branch.
 
-当时已推送代码，但未手动部署或创建 GitHub Release，也未验证生产部署状态。后续代理必须重新检查当前交付状态，不将设置页的「首个正式上线版本」文案当作生产验收证据。
+At that handoff, the code had been pushed, but no manual deployment or GitHub Release had been performed, and production deployment status had not been verified. Recheck delivery status rather than treating the Settings label “first official release” as production acceptance evidence.
 
-**尚未实现：**团队共享、管理员面板、订阅/计费账本、token/成本配额、外部 MCP 客户端与 Gmail 连接。小时请求限额不等于成本预算，不把这些计划宣传为现成功能。
+**Not implemented:** team sharing, an admin panel, subscription/billing ledgers, token/cost quotas, an external MCP client, or Gmail connections. An hourly request limit is not a cost budget. Do not describe these plans as existing features.
 
-若任务将来涉及 Gmail/MCP：先做服务端用户级只读 `search/read` 适配，限定工具和 OAuth scope；凭据加密保存且不进入提示词/checkpoint，邮件及附件视为不可信输入并限制大小。MCP 的只读标注不是授权，不暴露任意 MCP URL 或启动命令。发送、转发、删除需独立授权、明确确认对象/内容、持久外部任务及不确定结果核对。这是设计约束，不是要求现在实现。
+If a future task involves Gmail/MCP, start with a server-side, user-scoped read-only `search/read` adapter with explicit tools and OAuth scopes. Keep credentials encrypted and out of prompts/checkpoints; treat email and attachments as untrusted input and bound their size. An MCP read-only annotation is not authorization. Do not expose arbitrary MCP URLs or launch commands. Sending, forwarding, and deleting require separate grants, explicit confirmation of targets/content, durable external-operation jobs, and reconciliation of uncertain results. These are design constraints, not instructions to implement the integration now.
 
-## 验证规则
+## Verification
 
-先看 `package.json` 与目标测试文件；不要把不同测试入口混为一谈。
+Read `package.json` and the target test files first. Keep the different test entry points distinct.
 
-| 检查       | 命令与前提                                                                               |
-| ---------- | ---------------------------------------------------------------------------------------- |
-| 单元测试   | `npm test`，仅匹配 `tests/unit/*.test.ts`                                                |
-| 静态检查   | `npm run lint`、`npx tsc --noEmit`                                                       |
-| 生产构建   | `npm run build`；构建成功不等于运行或部署验收                                            |
-| 格式       | `npm run format -- <改动文件>`、`npm run format:check -- <改动文件>`；不要全仓格式化     |
-| 数据库隔离 | `npm run test:db`，需要已迁移的一次性数据库与 `DATABASE_URL`                             |
-| API        | `npm run test:api`，需要运行中的应用、同一测试数据库、独立附件目录及 `tests/mock-ai.mjs` |
+| Check              | Command and prerequisites                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Unit tests         | `npm test`; matches only `tests/unit/*.test.ts`                                                                          |
+| Static checks      | `npm run lint`, `npx tsc --noEmit`                                                                                       |
+| Production build   | `npm run build`; a successful build is not runtime or deployment acceptance                                              |
+| Formatting         | `npm run format -- <changed-files>`, `npm run format:check -- <changed-files>`; no repository-wide formatting            |
+| Database isolation | `npm run test:db`; requires a migrated disposable database and `DATABASE_URL`                                            |
+| API                | `npm run test:api`; requires a running app, the same test database, isolated attachment storage, and `tests/mock-ai.mjs` |
 
-Next.js 会读取 `.env.local`，独立 Node 测试和迁移脚本不会自动读取。例如在**确认 `.env.test.local` 仅指向一次性测试资源后**可运行：
+Next.js loads `.env.local`; standalone Node tests and migration scripts do not load it automatically. For example, **after confirming that `.env.test.local` points only to disposable test resources**, run:
 
 ```sh
 node --env-file=.env.test.local scripts/migrate.mjs
@@ -85,37 +85,37 @@ node --env-file=.env.test.local --test --import tsx tests/tenant-isolation.test.
 node --env-file=.env.test.local --test tests/api.test.mjs
 ```
 
-测试配置文件需要自行准备且不得提交。API 测试的应用进程与测试进程必须使用同一数据库和附件根目录；使用 `AI_MODE=personal`，设置匹配应用来源的 `BASE_URL` / `TEST_ORIGIN`。模拟模型默认监听 4010，`TEST_AI_BASE_URL` 可覆盖地址。`SCAN_LIVE=1` 会访问真实招聘来源，不应默认开启。
+Prepare the test configuration yourself and never commit it. The API test process and application process must use the same database and attachment root. Use `AI_MODE=personal` and set `BASE_URL` / `TEST_ORIGIN` to match the application's origin. The mock model listens on port 4010 by default; `TEST_AI_BASE_URL` overrides its address. `SCAN_LIVE=1` accesses a real recruiting source and should not be enabled by default.
 
-`tests/backup.test.ts`、`tests/agent-runtime.integration.ts`、`tests/integration/scanner-retry.test.ts` 等不属于 `npm test`，有各自数据库名称、模式或连接要求，运行前读文件头与 setup。某些测试会 `TRUNCATE`；API 测试会删除记录并递归删除测试账号附件。**禁止在生产或共享业务数据上运行它们；也不要放宽安全检查来强行运行。**
+Files such as `tests/backup.test.ts`, `tests/agent-runtime.integration.ts`, and `tests/integration/scanner-retry.test.ts` are not part of `npm test`. They have their own database-name, mode, or connection requirements; read their headers and setup before running them. Some tests use `TRUNCATE`; API tests delete records and recursively remove test-account attachment directories. **Never run them against production or shared business data, and do not weaken their safety guards to force a run.**
 
-验证规模按风险选择：文档检查格式、路径和命令真实性；局部行为跑定向回归；共享边界变更补静态检查、相关集成与构建。测试应覆盖错误实现会失败的场景，尤其是跨账号访问、并发修改、重复确认、失败恢复与权限变化。
+Scale verification to risk: check formatting, paths, and command accuracy for documentation; run targeted regressions for local behavior changes; add static checks, relevant integration tests, and a build for shared-boundary changes. Tests should fail for plausible wrong implementations, especially cross-account access, concurrent edits, duplicate confirmations, recovery failures, and permission changes.
 
-UI 外观变更必须实际渲染受影响状态并检查截图；交互变更实际操作并核对 DOM/无障碍状态。截图只用合成数据，不公开邮箱、简历、密钥。不能运行的检查说明阻碍，不声称已通过。
+For visual UI changes, render affected states and inspect screenshots. For interaction changes, exercise the behavior and check DOM/accessibility state. Use synthetic data in screenshots; never expose emails, CVs, or keys. Report checks that could not run and their blockers rather than claiming they passed.
 
-## 开发环境与操作安全
+## Development environment and operational safety
 
-- 开发默认 `SCHEDULER=off`，这也关闭 agent 后台 worker；不要将排队状态误认为已完成。需要验证 worker 时仅在隔离环境显式启用。
-- Amp orb 使用 `amp orb services ensure` 启动仓库服务；其他长驻测试服务使用受管 service。使用实际返回的 Portal URL 分享预览，不分享 orb 的回环地址。
-- `.amp/services.yaml` 中 `RUNWAY_FAST_DEV=1` 只优化高延迟预览传输；组件编辑可能整页刷新并丢失未保存状态。需要保留 Fast Refresh 状态时可移除该标志再重启服务；不据此宣称生产性能改善。
-- `.agents/setup` 包含仅适用于可丢弃开发数据的 PostgreSQL 持久性设置，不可照搬到生产。
-- 不打印或提交 `.env.local`、数据库内容、附件、简历、session cookie、provider key、集成 token 和备份。
-- 迁移共享/生产数据库、部署、推送、创建/合并 PR、发布版本及破坏性操作必须获得用户明确授权。注意 Docker 启动自带迁移副作用。
+- Keep `SCHEDULER=off` during development; it also disables the agent background worker. Queued work is not completed work. Enable the worker explicitly only in an isolated environment when testing it.
+- In Amp orbs, start repository services with `amp orb services ensure`; use managed services for other long-running test processes. Share the actual returned Portal URL, not an orb loopback address.
+- `RUNWAY_FAST_DEV=1` in `.amp/services.yaml` optimizes transfer for high-latency previews only. Component edits may cause a full reload and lose unsaved state. Remove the flag and restart services when state-preserving Fast Refresh matters; do not claim production performance gains from it.
+- `.agents/setup` contains PostgreSQL durability settings suitable only for disposable development data. Never copy them into production.
+- Do not print or commit `.env.local`, database contents, attachments, CVs, session cookies, provider keys, integration tokens, or backups.
+- Obtain explicit user authorization before migrating shared/production databases, deploying, pushing, creating/merging PRs, publishing releases, or taking destructive actions. Remember that Docker startup runs migrations.
 
-## 如何记录改动过程并交给下一个 AI
+## Recording changes and handing off to the next AI
 
-**Git 记录已完成的变更与原因；任务交接记录当前状态与接续入口；本文件只保留长期约定和关键决策。** 不要把每次工具输出追加到这里，也不要把“计划执行”写成“已经完成”。
+**Git records completed changes and their rationale; handoffs record current state and where to resume; this file holds lasting conventions and important decisions.** Do not append every tool output here or describe planned work as completed.
 
-- 提交正文说明解决什么问题、为什么选择此方案、兼容性/迁移影响及验证结果；若工具支持，保留 `Amp-Thread-ID` 以回溯讨论。用户未授权提交或推送时，保留工作区改动并如实说明。
-- 任务暂停或结束时，在最终回复中按下面的模板交接。若用户需要跨会话落盘，使用其指定的任务文档；没有现成文档时可新增 `TASKS.md`，但不要为空任务创建文件，也不要在公开文件留下私有数据。
-- 新代理先检查当前 Git 状态和实际代码，再使用交接中的下一步；状态会过时。完成项应移出待办，长期决策同步到相关文档，不依赖某一平台的私有线程。
+- Commit bodies should explain the problem, chosen approach, compatibility/migration implications, and verification results. Preserve `Amp-Thread-ID` when supported so the discussion remains traceable. If committing or pushing is not authorized, retain the working changes and state that clearly.
+- When pausing or finishing a task, use the template below in the final reply. If the user needs a persisted cross-session handoff, use their designated task document. If none exists, `TASKS.md` may be added, but do not create an empty task file or put private data in public documents.
+- A resuming agent must check current Git state and code before following the handoff: status can become stale. Remove completed items from the backlog, promote lasting decisions to the relevant documentation, and do not rely exclusively on a platform-private thread.
 
 ```text
-目标：用户要的结果及明确不做的事。
-状态：已完成 / 进行中 / 阻塞；当前分支、已提交变更和未提交路径。
-原因：原问题、证据、选定方案及重要取舍；区分事实与假设。
-验证：实际命令、结果、未运行项及原因；UI 附合成数据的检查证据。
-剩余：明确的待办、已知风险或所需授权，不把建议写成承诺。
-接续：下一项可执行动作、入口文件、可安全复现的方法。
-交付：分别说明本地修改、提交、推送、合并、部署的真实状态。
+Goal: Requested outcome and explicit non-goals.
+State: Complete / in progress / blocked; current branch, commits, and uncommitted paths.
+Rationale: Original problem, evidence, chosen approach, and important tradeoffs; separate facts from assumptions.
+Verification: Actual commands, results, skipped checks and reasons; synthetic-data evidence for UI checks.
+Remaining work: Concrete tasks, known risks, or required approvals; distinguish recommendations from commitments.
+Resume here: Next executable action, entry files, and a safe reproduction procedure.
+Delivery: Report local edits, commits, pushes, merges, and deployment status separately.
 ```
