@@ -65,6 +65,7 @@ const cases: {
   expected: string;
 }[] = [
   { name: "active job stage", kind: "job", patch: { status: "已投递" }, expected: "跟进申请" },
+  { name: "AI assessment stage", kind: "job", patch: { status: "AI测评" }, expected: "AI测评" },
   { name: "offer stage", kind: "job", patch: { status: "Offer" }, expected: "接受 Offer" },
   { name: "rejection clears stale action", kind: "job", patch: { status: "未通过" }, expected: "" },
   { name: "withdrawal clears stale action", kind: "job", patch: { status: "放弃" }, expected: "" },

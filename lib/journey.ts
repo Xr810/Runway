@@ -71,7 +71,7 @@ export function groupCompanies(entries: Entry[]) {
 }
 export const isApplied = (entry: Entry) =>
   !!entry.applied ||
-  ["已投递", "笔试", "一面", "二面", "终面", "Offer", "未通过"].includes(entry.status);
+  ["已投递", "笔试", "AI测评", "一面", "二面", "终面", "Offer", "未通过"].includes(entry.status);
 export function companySymbol(name: string) {
   const words = name.match(/[A-Za-z0-9]+/g);
   return words?.length
