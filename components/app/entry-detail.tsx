@@ -389,13 +389,13 @@ export default function EntryDetail() {
                                   label: "投递链接",
                                   value: entry.applicationUrl && (
                                     <a
-                                      className="inline-flex items-center gap-1 text-primary hover:underline"
+                                      className="break-all select-text text-primary hover:underline"
                                       href={entry.applicationUrl}
                                       target="_blank"
                                       rel="noreferrer"
                                     >
-                                      打开
-                                      <ExternalLink className="size-3" />
+                                      {entry.applicationUrl}
+                                      <ExternalLink className="ml-1 inline size-3" />
                                     </a>
                                   ),
                                 },
