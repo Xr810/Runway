@@ -54,6 +54,7 @@ import { KindIcon } from "./views/projects";
 import { EvaluationTimeline, useEnrichment } from "./evaluation";
 import ProgressDialog, { newProgress, type ProgressDraft } from "./progress-dialog";
 import { JdSummary } from "./jd-summary";
+import { AssessmentAccess } from "./assessment-access";
 
 function download(blob: Blob, name: string) {
   const u = URL.createObjectURL(blob),
@@ -352,15 +353,24 @@ export default function EntryDetail() {
                                     <p className="mt-1 text-xs text-muted-foreground">
                                       {progress.label}
                                     </p>
-                                    {item.url && (
-                                      <a
-                                        className="text-xs text-primary hover:underline"
-                                        href={item.url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                      >
-                                        打开日程链接
-                                      </a>
+                                    {isJob && item.type === "assessment" ? (
+                                      <AssessmentAccess
+                                        key={`${entry.id}:${item.id}`}
+                                        entryId={entry.id}
+                                        appointmentId={item.id}
+                                        url={item.url}
+                                      />
+                                    ) : (
+                                      item.url && (
+                                        <a
+                                          className="text-xs text-primary hover:underline"
+                                          href={item.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                        >
+                                          打开日程链接
+                                        </a>
+                                      )
                                     )}
                                   </div>
                                   <Pill

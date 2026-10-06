@@ -25,6 +25,14 @@ Exports and automation fail closed on invalid records rather than using incomple
 Keep diagnostic reports to IDs and field paths, never full record content. Reproduce and repair
 invalid data in a disposable environment before any explicitly authorized production repair.
 
+Assessment login/password fields are stored separately from records using AES-256-GCM and
+`AI_SETTINGS_KEY`, bound to the owner, record, and assessment. They are not part of Agent
+snapshots, history, ordinary ZIP/JSON exports, or restores. Re-enter them after moving via an
+ordinary backup. A protected infrastructure database backup retains the encrypted values;
+recovering them also requires the original encryption key, stored separately and securely.
+Losing or replacing that key makes the existing credentials unreadable. Do not put credentials
+in JD text, notes, URLs, or other unencrypted fields to bypass this boundary.
+
 For vulnerabilities, use GitHub private vulnerability reporting when available. Do not
 include credentials or personal data in public issues. Rotate exposed credentials;
 deleting a file in the latest commit does not erase it from Git history.

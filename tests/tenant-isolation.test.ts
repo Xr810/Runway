@@ -89,6 +89,120 @@ test("derived JD summaries are isolated, deduplicated and do not write applicati
   assert.equal(calls, 1);
 });
 
+test("assessment access is encrypted, round-bound, revision-checked and excluded from ordinary records", async () => {
+  const { getAssessmentAccess, saveAssessmentAccess } = await import("../lib/assessment-access");
+  const entry = (
+    await as(accountA, () =>
+      entries.saveEntry({
+        ...blankEntry("job"),
+        title: "Access fixture",
+        appointments: [
+          {
+            id: "a",
+            title: "Assessment A",
+            type: "assessment",
+            startsAt: "",
+            stageState: "superseded",
+          },
+          {
+            id: "b",
+            title: "Assessment B",
+            type: "assessment",
+            startsAt: "",
+            stageState: "current",
+          },
+        ],
+      }),
+    )
+  ).entry;
+  const first = {
+    entryId: entry.id,
+    appointmentId: "a",
+    revision: 0,
+    login: "fixture-user@example.test",
+    password: " Fake-only-A&Code! ",
+  };
+  assert.deepEqual(await as(accountA, () => getAssessmentAccess(entry.id, "a")), {
+    login: "",
+    password: "",
+    revision: 0,
+  });
+  const writes = await Promise.allSettled([
+    as(accountA, () => saveAssessmentAccess(first)),
+    as(accountA, () => saveAssessmentAccess(first)),
+  ]);
+  assert.equal(writes.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(
+    writes.filter((result) => result.status === "rejected" && result.reason.status === 409).length,
+    1,
+  );
+  assert.deepEqual(await as(accountA, () => getAssessmentAccess(entry.id, "a")), {
+    login: first.login,
+    password: first.password,
+    revision: 1,
+  });
+  await as(accountA, () =>
+    saveAssessmentAccess({
+      ...first,
+      appointmentId: "b",
+      login: "second-fixture",
+      password: "Fake-only-B",
+    }),
+  );
+  assert.equal(
+    (await as(accountA, () => getAssessmentAccess(entry.id, "b"))).password,
+    "Fake-only-B",
+  );
+  const storageKey = `assessment-access-v1:${entry.id}:a`;
+  const stored = (
+    await as(accountA, () => pool.query("SELECT value FROM meta WHERE key=$1", [storageKey]))
+  ).rows[0].value;
+  assert(!stored.includes(first.password) && !stored.includes(first.login));
+  assert.equal(
+    (await as(accountB, () => pool.query("SELECT value FROM meta WHERE key=$1", [storageKey])))
+      .rowCount,
+    0,
+  );
+  await assert.rejects(
+    as(accountB, () => getAssessmentAccess(entry.id, "a")),
+    { status: 404 },
+  );
+  await assert.rejects(
+    as(accountB, () => saveAssessmentAccess(first)),
+    { status: 404 },
+  );
+  await assert.rejects(
+    as(accountA, () => getAssessmentAccess(entry.id, "missing")),
+    { status: 404 },
+  );
+  const records = JSON.stringify(await as(accountA, () => entries.listEntries()));
+  assert(!records.includes(first.password) && !records.includes(first.login));
+  assert.deepEqual(await as(accountA, () => entries.getEntry(entry.id)), entry);
+  // Moving a valid encrypted value to another round must not reveal the first round's secret.
+  await as(accountA, () =>
+    pool.query("UPDATE meta SET value=$2 WHERE key=$1", [
+      `assessment-access-v1:${entry.id}:b`,
+      stored,
+    ]),
+  );
+  await assert.rejects(
+    as(accountA, () => getAssessmentAccess(entry.id, "b")),
+    { status: 503 },
+  );
+  await as(accountA, () =>
+    saveAssessmentAccess({ ...first, revision: 1, login: "", password: "" }),
+  );
+  assert.deepEqual(await as(accountA, () => getAssessmentAccess(entry.id, "a")), {
+    login: "",
+    password: "",
+    revision: 2,
+  });
+  await assert.rejects(
+    as(accountA, () => saveAssessmentAccess(first)),
+    { status: 409 },
+  );
+});
+
 after(async () => {
   // Only rows owned by these disposable accounts are removed. RLS is deliberately
   // kept active during cleanup so a typo cannot delete another test's fixtures.
