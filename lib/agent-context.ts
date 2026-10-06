@@ -11,6 +11,8 @@ import { cachedBrief } from "./brief";
 import { pool } from "./postgres";
 import { today } from "./model";
 import { aiReplySchema } from "./ai-contract";
+import { getReminderPreferences } from "./reminder-preferences";
+import { timelineEvents } from "./journey";
 
 export async function loadAgentSnapshot(
   base: Omit<AgentSnapshot, "deleted" | "directory" | "scanSettings">,
@@ -40,9 +42,16 @@ export async function readAgentData(raw: AgentRead, s: AgentSnapshot) {
   const r = agentReadSchema.parse(raw);
   let value: unknown;
   switch (r.module) {
-    case "entries":
-      value = s.entries;
+    case "entries": {
+      const preferences = await getReminderPreferences();
+      value = s.entries.map((entry) => ({
+        ...entry,
+        derivedSchedule: timelineEvents([entry], preferences).map(
+          ({ id, date, time, label, type, detail }) => ({ id, date, time, label, type, detail }),
+        ),
+      }));
       break;
+    }
     case "deleted":
       value = s.deleted;
       break;
@@ -74,7 +83,7 @@ export async function readAgentData(raw: AgentRead, s: AgentSnapshot) {
       value = s.profile;
       break;
     case "settings":
-      value = { ai: s.ai, scan: s.scanSettings };
+      value = { ai: s.ai, scan: s.scanSettings, recruiting: await getReminderPreferences() };
       break;
     case "notifications":
       value = await listNotifications(true, r.before ?? null);
@@ -121,24 +130,22 @@ export async function readAgentData(raw: AgentRead, s: AgentSnapshot) {
       return {
         total: rows.length,
         nextOffset: r.offset + 20 < rows.length ? r.offset + 20 : null,
-        items: rows
-          .slice(r.offset, r.offset + 20)
-          .map((v) =>
-            JSON.stringify(v).length > 6000
-              ? {
-                  id: v.id,
-                  name: v.name,
-                  title: v.title,
-                  organization: v.organization,
-                  status: v.status,
-                  archived: v.archived,
-                  revision: v.revision,
-                  entry_id: v.entry_id,
-                  created: v.created,
-                  detailRequired: true,
-                }
-              : v,
-          ),
+        items: rows.slice(r.offset, r.offset + 20).map((v) =>
+          JSON.stringify(v).length > 6000
+            ? {
+                id: v.id,
+                name: v.name,
+                title: v.title,
+                organization: v.organization,
+                status: v.status,
+                archived: v.archived,
+                revision: v.revision,
+                entry_id: v.entry_id,
+                created: v.created,
+                detailRequired: true,
+              }
+            : v,
+        ),
       };
     }
   }

@@ -23,6 +23,8 @@ Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · PostgreSQL 17 · LangG
 
 AI is optional: manual record management does not require it. Link extraction depends on the source website, and generated assessments and company details need human review. Background automation requires model configuration, the relevant features enabled, and a running scheduler. Not every recruiting website can be scraped.
 
+For assessments without a company deadline, Runway derives a plan from the notification date plus **3 calendar days** by default. Change this account-specific default (1–90 days) in **Settings → 招聘提醒 → 测评默认计划天数**. Changing it recalculates plans without writing company deadlines. A missing notification date stays unknown. This is separate from the default seven-day post-completion follow-up; selecting a company-deadline-based follow-up still requires a real company deadline.
+
 ## Quick start
 
 Requirements: **Node.js ≥ 22.13, npm, and PostgreSQL 17**.

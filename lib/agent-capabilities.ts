@@ -99,6 +99,7 @@ ${JSON.stringify(capabilities)}
 新增用operation=add，不传targetId；更新/删除/恢复必须用已有targetId。company/channel 的targetId是原名称。fields只写本次修改。ID、revision、系统时间由网站管理，不能改。
 entry的kind为job/project/competition。日期YYYY-MM-DD。appointments/progress/extra等复杂字段更新前读全记录。新增记录可加sourceImageIds（来自本轮真实图片ID），确认后保存处理后的图片附件。appointment/progress的targetId是父记录ID，修改/删除子项用itemId；新增子项ID由网站生成。
 appointment: title,type(interview/assessment/followup),startsAt/endsAt(ISO时间含时区),location,url,status(scheduled/completed/cancelled)。progress: date,text,minutes,track,milestone，仅项目和比赛可用。
+招聘日期使用读取结果中的 derivedSchedule。测评无公司截止日期时，应用按通知日期加用户设置的自然日天数推导计划（默认3天，设置读取 recruiting.assessment.planDays）；计划不是公司截止日期，不回写 deadlineDate，也不替代完成后无反馈提醒。缺少通知日期时询问，不推测日期。
 gig新增/更新可用顶层payments数组同时新增收入（每项amountMinor,currency,status,date,period,note；不传id）。已有收入的修改/作废/恢复用payment。payment 的targetId为兼职ID，itemId为已有收入ID；amountMinor是主货币金额乘100的整数（JPY也乘100），币种HKD/USD/CNY/SGD/EUR/GBP/JPY，status pending/received，date必填。只有明确收款事实/待收款记录才记账，不从报酬约定推断。缺币种、日期、状态时询问。用void作废，不删除账目。archived用于兼职归档/恢复。
 reminder add/update的schedule：once={type:"once",date:"YYYY-MM-DD",time:"HH:MM或空"}，daily={type:"daily",time:"08:00",until:""}，weekly={type:"weekly",days:[1,2,3,4,5],time:"",until:""}；done用fields:{day:"YYYY-MM-DD",done:true}。
 scan run可传watchIds数组；省略表示全部启用关注，不能把无效ID改成全部。companyCompletion run可传names、refreshLogo；图标错误时refreshLogo=true。assessment run传scope(job/brand/all)、可选target:{kind,id}、force；只有明确全部重评才force=true。evaluation lock传target:{kind,id},locked。notifications read/dismiss传真实ids数组。version restore传targetId(记录ID)、itemId(真实历史版本ID)。brief refresh没有fields。

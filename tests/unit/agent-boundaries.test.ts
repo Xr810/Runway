@@ -14,6 +14,10 @@ import { runModelGraph } from "../../lib/agent-model-loop";
 import { z } from "zod";
 import { isAgentJob, agentJobCommands } from "../../lib/agent-commands";
 import { parseAgentOperation } from "../../lib/agent-payload";
+import { blankEntry } from "../../lib/model";
+import { appointmentSchema } from "../../lib/appointments";
+import { defaultReminderPreferences } from "../../lib/recruiting-reminders";
+import { timelineEvents } from "../../lib/journey";
 
 test("legacy destinations distinguish jobs from settings; ambiguous commands fail closed", () => {
   assert.equal(draftCommand({ path: "/api/scan", body: { action: "run" } }), "scan");
@@ -91,6 +95,13 @@ test("planning does not fetch all history and restore hydration reads only reque
       "./brief": {},
       "./postgres": {},
       "./model": {},
+      "./reminder-preferences": {
+        getReminderPreferences: async () => ({
+          ...defaultReminderPreferences,
+          assessment: { ...defaultReminderPreferences.assessment, planDays: 5 },
+        }),
+      },
+      "./journey": { timelineEvents },
       "./ai-contract": { aiReplySchema },
     },
   );
@@ -117,6 +128,30 @@ test("planning does not fetch all history and restore hydration reads only reque
     ),
   );
   assert.deepEqual(ids, ["v2", "missing"], "validate the read budget before database access");
+  snapshot.entries = [
+    {
+      ...blankEntry("job"),
+      id: "assessment-job",
+      title: "Derived dates",
+      appointments: [
+        appointmentSchema.parse({
+          id: "assessment",
+          title: "Test",
+          type: "assessment",
+          startsAt: "",
+          receivedDate: "2026-09-29",
+        }),
+      ],
+    },
+  ];
+  const read = (await context.readAgentData(
+    { module: "entries", id: "assessment-job", offset: 0 },
+    snapshot,
+  )) as { derivedSchedule: { date: string; label: string }[] };
+  assert.equal(read.derivedSchedule[0].date, "2026-10-04");
+  assert.equal(read.derivedSchedule[0].label, "测评计划期限");
+  assert.equal(snapshot.entries[0].appointments[0].deadlineDate, "");
+  assert.equal("derivedSchedule" in snapshot.entries[0], false);
 });
 
 test("async proposal preparation is awaited and failures enter the bounded repair loop", async () => {

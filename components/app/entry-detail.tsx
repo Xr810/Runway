@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { type Entry, score, statusesFor } from "@/lib/model";
-import { appointmentDate, appointmentTime, stageProgress } from "@/lib/appointments";
+import { appointmentDate, appointmentTime, stageDueDate, stageProgress } from "@/lib/appointments";
 import { recruitingReminders } from "@/lib/recruiting-reminders";
 import { today } from "@/lib/model";
 import { Button } from "@/components/ui/button";
@@ -305,7 +305,12 @@ export default function EntryDetail() {
                                   [entry],
                                   data.reminderPreferences,
                                 ).find((reminder) => reminder.appointmentId === item.id)?.date,
-                                progress = stageProgress(item, today(), due);
+                                progress = stageProgress(
+                                  item,
+                                  today(),
+                                  due,
+                                  data.reminderPreferences.assessment.planDays,
+                                );
                               return (
                                 <li
                                   key={item.id}
@@ -316,7 +321,7 @@ export default function EntryDetail() {
                                     <p className="text-sm font-medium">{item.title}</p>
                                     <p className="text-xs text-muted-foreground">
                                       {item.type === "assessment"
-                                        ? `通知 ${formatDay(item.receivedDate)} · 截止 ${formatDay(item.deadlineDate)}${item.completedAt ? ` · 完成 ${formatDay(appointmentDate(item.completedAt))}` : ""}`
+                                        ? `通知 ${formatDay(item.receivedDate) || "未设置"} · ${item.deadlineDate ? "公司截止" : "应用计划期限"} ${formatDay(stageDueDate(item, data.reminderPreferences.assessment.planDays)) || "未设置（缺少通知日期）"}${item.completedAt ? ` · 完成 ${formatDay(appointmentDate(item.completedAt))}` : ""}`
                                         : `${formatDay(appointmentDate(item.startsAt))} ${appointmentTime(item.startsAt)}${item.endsAt ? "–" + appointmentTime(item.endsAt) : ""}`}
                                       {item.location ? " · " + item.location : ""}
                                     </p>
