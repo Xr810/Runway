@@ -6,10 +6,45 @@ if (!/^\/runway_backup_test_[a-z0-9_]+$/.test(new URL(process.env.DATABASE_URL!)
   throw Error("Use the disposable database runner");
 const { pool, controlPool, runAsUser } = await import("../lib/postgres");
 const { blankEntry } = await import("../lib/model");
-const { listEntries, listSummaries, saveEntry } = await import("../lib/entries");
+const {
+  listEntries,
+  listSummaries,
+  saveEntry,
+  getEntry,
+  deleteEntry,
+  undeleteEntry,
+  patchEntry,
+  listDeleted,
+} = await import("../lib/entries");
 const owner = randomUUID();
 await controlPool.query("INSERT INTO accounts(id,display_name) VALUES($1,'read fixture')", [owner]);
 after(() => pool.end());
+
+test("delete and restore invalidate every pre-delete write revision", async () => {
+  const user = randomUUID();
+  await controlPool.query("INSERT INTO accounts(id,display_name) VALUES($1,'lifecycle fixture')", [
+    user,
+  ]);
+  await runAsUser(user, async () => {
+    const saved = (await saveEntry({ ...blankEntry("project"), title: "Original" })).entry;
+    await deleteEntry(saved.id, saved.revision);
+    assert.equal(await getEntry(saved.id), null);
+    assert.equal((await listDeleted())[0].revision, saved.revision + 1);
+    await undeleteEntry(saved.id);
+    const restored = (await getEntry(saved.id))!;
+    assert.equal(restored.revision, saved.revision + 2);
+    await assert.rejects(saveEntry({ ...saved, title: "Stale overwrite" }), { status: 409 });
+    await assert.rejects(patchEntry(saved.id, saved.revision, { title: "Stale patch" }), {
+      status: 409,
+    });
+    await assert.rejects(deleteEntry(saved.id, saved.revision), { status: 409 });
+    assert.equal((await getEntry(saved.id))!.title, "Original");
+    assert.equal(
+      (await patchEntry(saved.id, restored.revision, { title: "Fresh edit" })).revision,
+      restored.revision + 1,
+    );
+  });
+});
 
 test("summary read baseline preserves full-JD validation and UTF-16 counts", async (t) => {
   await runAsUser(owner, async () => {

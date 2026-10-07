@@ -122,6 +122,7 @@ export function DeskProvider({ children }: { children: ReactNode }) {
   const [evaluation, openEvaluation] = useState<EnrichmentTarget | null>(null);
   const [brandLogos, setBrandLogos] = useState<Record<string, string>>({});
   const refreshVersion = useRef(0);
+  const editVersion = useRef(0);
   const active = useRef(true);
 
   const refresh = useCallback(async function refreshDesk(afterWrite = false) {
@@ -297,13 +298,17 @@ export function DeskProvider({ children }: { children: ReactNode }) {
 
   const editEntry = useCallback(
     (entry: Pick<Entry, "id">) => {
+      const version = ++editVersion.current;
       fetchEntry(entry.id)
         .then((d) => {
+          if (!active.current || version !== editVersion.current) return;
           setReturnTo(selectedId);
           setSelectedId(null);
           setDraft({ ...d.entry });
         })
-        .catch((e) => toast.error((e as Error).message));
+        .catch((e) => {
+          if (active.current && version === editVersion.current) toast.error((e as Error).message);
+        });
     },
     [selectedId],
   );
@@ -346,16 +351,24 @@ export function DeskProvider({ children }: { children: ReactNode }) {
       selected,
       selectedVersions: full?.versions ?? [],
       selectedLoading: !!summary && !full,
-      openEntry: setSelectedId,
-      closeEntry: () => setSelectedId(null),
+      openEntry: (id) => {
+        editVersion.current++;
+        setSelectedId(id);
+      },
+      closeEntry: () => {
+        editVersion.current++;
+        setSelectedId(null);
+      },
       draft,
       editEntry,
       newEntry: (kind, preset) => {
+        editVersion.current++;
         setReturnTo(null);
         setDraft({ ...blankEntry(kind), ...preset });
       },
       // The detail sheet steps aside while editing and comes back afterwards.
       closeEditor: () => {
+        editVersion.current++;
         setDraft(null);
         if (returnTo) setSelectedId(returnTo);
         setReturnTo(null);

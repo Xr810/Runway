@@ -8,7 +8,7 @@ import { listEntries } from "./entries";
 import { listReminders } from "./reminders";
 import { evaluationProfile } from "./enrichment";
 import { aiJson } from "./ai-client";
-import { getAiConfig } from "./ai-config";
+import { getAiConfig, isAiConfigured } from "./ai-config";
 import { getReminderPreferences } from "./reminder-preferences";
 import { recruitingReminders } from "./recruiting-reminders";
 
@@ -49,7 +49,7 @@ async function inputs(day: string) {
     revision: ai.revision,
     base: ai.base,
     model: ai.model,
-    configured: !!(ai.base && ai.key && ai.model),
+    configured: isAiConfigured(ai),
   };
   return {
     entries,
@@ -216,5 +216,5 @@ export async function generateBrief(day = today()): Promise<Brief> {
 }
 
 function aiPolicyConfigured(ai: Awaited<ReturnType<typeof getAiConfig>>) {
-  return ai.enabled !== false && !!(ai.base && ai.key && ai.model);
+  return isAiConfigured(ai);
 }

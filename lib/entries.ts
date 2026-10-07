@@ -212,14 +212,14 @@ export async function patchEntry(id: string, revision: number, patch: Record<str
 
 export async function deleteEntry(id: string, revision: number) {
   const result = await pool.query(
-    "UPDATE entries SET deleted_at=now() WHERE id=$1 AND revision=$2 AND deleted_at IS NULL",
+    "UPDATE entries SET deleted_at=now(), revision=revision+1, updated=now() WHERE id=$1 AND revision=$2 AND deleted_at IS NULL",
     [id, revision],
   );
   if (result.rowCount !== 1) throw new EntryError(409, "记录已更新或已删除，请重新加载");
 }
 export async function undeleteEntry(id: string) {
   const result = await pool.query(
-    "UPDATE entries SET deleted_at=NULL, updated=now() WHERE id=$1 AND deleted_at IS NOT NULL",
+    "UPDATE entries SET deleted_at=NULL, revision=revision+1, updated=now() WHERE id=$1 AND deleted_at IS NOT NULL",
     [id],
   );
   if (result.rowCount !== 1) throw new EntryError(404, "回收站里没有这条记录");

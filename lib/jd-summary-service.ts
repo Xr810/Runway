@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { aiJson } from "./ai-client";
-import { getAiConfig } from "./ai-config";
+import { getAiConfig, isAiConfigured } from "./ai-config";
 import { agentPolicy, assertAgentCommand } from "./agent-policy";
 import { getEntry, listEntries } from "./entries";
 import { pool, currentUserId } from "./postgres";
@@ -9,8 +9,7 @@ import { groundJdSummary, jdSummarySchema, type JdSummaryView } from "./jd-summa
 const sourceHash = (jd: string) => createHash("sha256").update(jd).digest("hex");
 const key = (id: string) => "jd-summary-v1:" + id;
 type Stored = JdSummaryView & { hash: string };
-const configured = (config: Awaited<ReturnType<typeof getAiConfig>>) =>
-  config.enabled !== false && !!(config.base && config.key && config.model);
+const configured = isAiConfigured;
 async function cached(id: string): Promise<Stored | null> {
   const row = (await pool.query("SELECT value FROM meta WHERE key=$1", [key(id)])).rows[0];
   return row ? JSON.parse(row.value) : null;

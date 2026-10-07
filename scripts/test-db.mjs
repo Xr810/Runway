@@ -61,6 +61,7 @@ try {
       "tests/entry-read.test.ts",
       "tests/postgres-disconnect.test.ts",
       "tests/job-misc-fields.test.ts",
+      "tests/chatgpt.test.ts",
     ],
     env,
   );

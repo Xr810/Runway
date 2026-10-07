@@ -45,6 +45,7 @@ test("derived JD summaries are isolated, deduplicated and do not write applicati
       "./entries": entries,
       "./postgres": postgres,
       "./ai-config": {
+        isAiConfigured: ai.isAiConfigured,
         getAiConfig: async () => ({
           enabled: true,
           base: "fixture",

@@ -30,7 +30,12 @@ function json(data: unknown, status = 200) {
   return Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 }
 async function authorize(request: Request, write = false) {
-  if (!(await getUser())) return json({ error: "请先登录" }, 401);
+  try {
+    if (!(await getUser())) return json({ error: "请先登录" }, 401);
+  } catch (error) {
+    console.error("Desk authentication failed", error);
+    return json({ error: "验证登录状态失败，请稍后重试" }, 503);
+  }
   if (write && !validOrigin(request)) return json({ error: "请求来源无效" }, 403);
 }
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/);

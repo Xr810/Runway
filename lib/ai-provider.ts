@@ -16,8 +16,8 @@ import {
 } from "./model";
 import { prepareAiReply, type aiRequestSchema, type AiContext } from "./ai-contract";
 import type { z } from "zod";
-import { aiFetch } from "./ai-http";
-import { getAiConfig, type AiConfig } from "./ai-config";
+import { callAiModel } from "./ai-model";
+import { getAiConfig, isAiConfigured, type AiConfig } from "./ai-config";
 import type { EvaluationProfile } from "./enrichment-contract";
 import { readPage, type ReadablePage } from "./web";
 import { postingFromUrl } from "./ats";
@@ -183,9 +183,14 @@ export async function askAi(
   config?: AiConfig,
 ) {
   const active = config ?? (await getAiConfig());
-  const { base, key, model } = active;
+  const { model } = active;
   if (active.enabled === false) throw Error("此账户未启用 AI。");
-  if (!base || !key || !model) throw Error("AI 尚未配置，请到设置中填写模型。");
+  if (!isAiConfigured(active))
+    throw Error(
+      active.source === "chatgpt"
+        ? "ChatGPT 尚未连接、授权已失效或未选择模型，请检查订阅设置。未切换到 API Key。"
+        : "AI 尚未配置，请到设置中填写模型。",
+    );
   if (context.search?.note && !context.pages.some((p) => p.page) && !input.images.length)
     return unavailableLinkReply(model, context.pages, context.search.note);
   if (
@@ -228,24 +233,7 @@ export async function askAi(
   };
   const budgetSignal = AbortSignal.any([AbortSignal.timeout(240000), ...(signal ? [signal] : [])]);
   const result = await runModelGraph(messages, {
-    call: async (messages) => {
-      const response = await aiFetch(base, key, "/chat/completions", {
-        body: JSON.stringify({
-          model,
-          messages,
-          response_format: { type: "json_object" },
-          max_tokens: 12000,
-        }),
-        signal: budgetSignal,
-      });
-      if (!response.ok)
-        throw Error(response.status === 429 ? "模型服务繁忙或额度不足。" : "模型服务暂时不可用。");
-      const data = await response.json(),
-        choice = data.choices?.[0];
-      if (choice?.finish_reason === "length") throw Error("识别结果太长，请分批操作。");
-      if (typeof choice?.message?.content !== "string") throw Error("模型没有返回可读结果。");
-      return choice.message.content;
-    },
+    call: (messages) => callAiModel(active, messages, { signal: budgetSignal, maxTokens: 12000 }),
     read: (r) => (context.read ? context.read(r) : Promise.reject(Error("读取上下文不可用"))),
     prepare: async (raw) => {
       await context.prepare?.(raw);

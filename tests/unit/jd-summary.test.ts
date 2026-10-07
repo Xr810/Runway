@@ -4,6 +4,7 @@ import * as crypto from "node:crypto";
 import { loadModule } from "../helpers/load-module";
 import * as contract from "../../lib/jd-summary";
 import { agentPolicy, assertAgentCommand } from "../../lib/agent-policy";
+import { isAiConfigured } from "../../lib/ai-config";
 import { blankEntry } from "../../lib/model";
 import { jd, summary } from "../fixtures/jd-summary";
 
@@ -38,6 +39,7 @@ function fixture() {
         },
       },
       "./ai-config": {
+        isAiConfigured,
         getAiConfig: async () => ({
           enabled,
           base: "mock",

@@ -108,6 +108,11 @@ Business requests pass through API routes and domain modules to account-isolated
 
 ## Development and verification
 
+Personal self-hosted instances can also opt into the preview **ChatGPT subscription** model
+source without replacing Runway's Agent or running Codex. See [local authorization and personal
+VM setup](deploy/chatgpt.md) for protected transfer, refresh ownership, eligibility and unverified
+live acceptance limitations. API Key remains a separate explicitly selected billing path.
+
 ```sh
 npm test                 # tests/unit/*.test.ts only; excludes database/API integration tests
 npm run lint
