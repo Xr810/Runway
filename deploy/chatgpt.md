@@ -22,7 +22,49 @@ inference. Paid/hosted integrations use OpenAI's separate interest process.
   Different Runway users never share credentials. To change ChatGPT account/workspace,
   explicitly disconnect first. Do not import one person's authorization for other users.
 
-## Local installation
+## Recommended: local helper with automatic pairing
+
+Use an up-to-date Runway checkout on both the server and the computer running your browser.
+The server needs HTTPS `APP_ORIGIN`, personal AI mode, an AI-enabled account, and the dedicated
+`AI_SETTINGS_KEY` described above. No new database migration is needed for pairing.
+
+1. On your computer, install Node.js ≥22.13 and run `npm ci` in the Runway checkout once.
+2. Start the helper in that directory:
+
+   ```sh
+   node --import tsx scripts/chatgpt.ts connect
+   ```
+
+3. In Runway Settings → AI model, click **生成本机配对码** and copy the code into the helper's
+   prompt. Do not open it as a link or put it in shell arguments. The code can authorize a
+   connection to your Runway account: keep it private and use only one from your own settings.
+4. Verify the HTTPS server address printed by the helper, type `yes`, and complete OpenAI
+   consent in the browser it opens. Leave the helper running until it confirms success.
+5. Return to Runway. The settings page checks this specific pairing for at most ten minutes,
+   then stops. Read the available models, save a model, test the connection, and explicitly
+   choose the ChatGPT source. Authorization alone does not change your active model source.
+
+The helper listens only on `127.0.0.1`, validates the callback state, and sends the authorization
+code to your server over HTTPS. The server retains PKCE/nonce, exchanges the code, verifies
+the OpenAI identity/scopes, and encrypts the credentials. The helper never receives access or
+refresh tokens and writes only its persistent local host ID, not a credential file. On
+reauthorization the server reuses the existing registration. To switch ChatGPT account or
+workspace, disconnect first. Only the server refreshes credentials.
+
+Pairing tickets are account-bound, encrypted, expire after ten minutes, and can start only
+one authorization attempt. Generating another code invalidates the old one; disconnecting or
+manually importing also invalidates it. The server consumes the attempt before code exchange,
+so a timeout or uncertain result is never automatically replayed. Check connection status,
+then generate a new pairing code if needed. The helper waits five minutes for browser consent.
+Closing the settings page stops polling but does not immediately invalidate its ticket.
+
+If a proxy requires an interactive browser login, helper requests may be blocked. The helper
+does not follow redirects or forward your Runway session cookies; configure appropriate
+server access before using this flow. Do not disable HTTPS or publish credentials to bypass it.
+This callback relay has automated mock coverage, but actual OpenAI consent and subscription
+inference still require a real user acceptance test; it is not a claim of upstream approval.
+
+## Advanced: manual local authorization and import
 
 In the repository on your browser computer, create `.env.chatgpt.local` with an independently
 generated random `RUNWAY_CHATGPT_TRANSFER_KEY` (at least 32 characters; use 32 random bytes
@@ -44,14 +86,15 @@ The ID token is signature-verified against OpenAI JWKS and checked for issuer, a
 expiry, nonce and subject before credentials are saved. Rejected/incomplete consent does not
 enable inference. Neither tokens nor returning authorization URLs are printed.
 
-Find your Runway account UUID under Settings → AI model → local authorization instructions.
+For manual import, find your Runway account UUID in the authenticated `/api/settings/chatgpt`
+response's `userId` field.
 Import using the **application's** database and encryption environment:
 
 ```sh
 node --env-file=.env.local --env-file=.env.chatgpt.local --import tsx scripts/chatgpt.ts import --file data/chatgpt-credentials.json --user YOUR_RUNWAY_ACCOUNT_UUID
 ```
 
-Import is an explicit administrative/local operation, not a browser token-upload endpoint.
+Manual import is an explicit administrative/local operation, not a browser token-upload endpoint.
 The file uses AES-256-GCM with the separate transfer key, atomic replacement and Unix `0600`.
 The import verifies identity again and requires a fresh, unexpired authorization. It seals
 credentials with the server encryption key, binds them to the Runway owner, and stores them in

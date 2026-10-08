@@ -14,6 +14,7 @@ type Connection = {
   registration: string;
   model: string;
   revision: number;
+  pairingId: string;
 };
 export default function ChatGptSettings({
   onChange,
@@ -28,6 +29,11 @@ export default function ChatGptSettings({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
+  const [pairing, setPairing] = useState<{
+    code: string;
+    expiresAt: number;
+    id: string;
+  } | null>(null);
   async function load() {
     const value = await readJson<Connection>(
       await fetch("/api/settings/chatgpt", { cache: "no-store" }),
@@ -52,6 +58,47 @@ export default function ChatGptSettings({
       active = false;
     };
   }, []);
+  useEffect(() => {
+    if (!pairing) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      if (Date.now() >= pairing.expiresAt) {
+        setPairing(null);
+        setError("配对码已过期。如仍未连接，请生成新配对码并重新运行助手。");
+        return;
+      }
+      try {
+        const value = await readJson<Connection>(
+          await fetch("/api/settings/chatgpt", {
+            cache: "no-store",
+            signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]),
+          }),
+        );
+        if (controller.signal.aborted) return;
+        setConnection(value);
+        if (value.status === "connected" && value.pairingId === pairing.id) {
+          setPairing(null);
+          setModel(value.model);
+          setError("");
+          setNotice("ChatGPT 已连接。请读取可用模型、保存并测试，再选择使用订阅来源。");
+          await onChange();
+          return;
+        }
+        timer = setTimeout(poll, 3000);
+      } catch {
+        if (!controller.signal.aborted) {
+          setPairing(null);
+          setError("连接状态检查失败，请点击刷新连接状态；未连接时重新生成配对码。");
+        }
+      }
+    };
+    timer = setTimeout(poll, 3000);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [pairing, onChange]);
   async function run(action: string) {
     if (busy || disabled) return;
     if (
@@ -68,13 +115,28 @@ export default function ChatGptSettings({
     setError("");
     setNotice("");
     try {
-      const value = await readJson<{ models?: { id: string; name: string }[]; message?: string }>(
+      const value = await readJson<{
+        models?: { id: string; name: string }[];
+        message?: string;
+        pairing?: string;
+        expiresAt?: number;
+        pairingId?: string;
+      }>(
         await fetch("/api/settings/chatgpt", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action, model, revision: connection?.revision }),
         }),
       );
+      if (value.pairing && value.expiresAt && value.pairingId) {
+        setPairing({
+          code: value.pairing,
+          expiresAt: value.expiresAt,
+          id: value.pairingId,
+        });
+        return;
+      }
+      if (action === "disconnect") setPairing(null);
       if (value.models) setModels(value.models);
       setNotice(
         value.message ??
@@ -162,39 +224,68 @@ export default function ChatGptSettings({
             断开并删除本地凭据
           </Button>
         </div>
-        <details className="rounded-lg border p-3" open={unavailable}>
-          <summary className="cursor-pointer font-medium">
-            Continue with ChatGPT · 在本机完成授权
-          </summary>
-          <div className="mt-3 space-y-2 text-xs text-muted-foreground">
-            <p>
-              在有浏览器的本机运行 Runway 授权命令（需要 Node.js 22.13+、仓库和 npm ci）。OAuth
-              仅支持本机回调；不要在远程 VM 浏览器中直接授权，也不要粘贴 token、密码或 Cookie
-              到此页面。
-            </p>
-            <p>
-              准备独立随机转移密钥并保存在本机受保护环境文件的 RUNWAY_CHATGPT_TRANSFER_KEY
-              中，再运行：
-            </p>
-            <code className="block break-all">
-              node --env-file=.env.chatgpt.local --import tsx scripts/chatgpt.ts authorize --out
-              data/chatgpt-credentials.json
-            </code>
-            <p>
-              将加密文件经 SSH/SCP
-              转移至个人服务器，转移密钥通过独立安全通道提供。服务器保留自己的主机标识，用应用数据库和加密配置导入至本人账户：
-            </p>
-            <code className="block break-all">
-              node --env-file=.env.local --env-file=.env.chatgpt.local --import tsx
-              scripts/chatgpt.ts import --file data/chatgpt-credentials.json --user{" "}
-              {connection?.userId ?? "账户 UUID"}
-            </code>
-            <p>
-              导入后删除转移副本和转移密钥（可另保留离线加密副本用于 --existing
-              重新授权）。只有服务器负责后续刷新。点击“刷新连接状态”，读取模型并测试后，再明确选用此来源。
-            </p>
-          </div>
-        </details>
+        <div className="space-y-3 rounded-lg border p-4">
+          <p className="font-medium">Continue with ChatGPT · 本机授权助手</p>
+          <p className="text-xs text-muted-foreground">
+            浏览器完成 OpenAI 登录，助手自动连接
+            Runway。无需传文件、转移密钥或操作服务器；本机不保存 ChatGPT token。
+          </p>
+          <ol className="list-inside list-decimal space-y-3 text-sm">
+            <li>
+              在有浏览器的电脑上准备 Node.js 22.13+ 和最新版 Runway 仓库，首次运行{" "}
+              <code>npm ci</code>。
+            </li>
+            <li>
+              在仓库目录启动助手：
+              <code className="mt-1 block overflow-x-auto whitespace-pre rounded bg-muted px-2 py-2 text-xs select-all">
+                node --import tsx scripts/chatgpt.ts connect
+              </code>
+            </li>
+            <li>
+              生成并复制配对码，粘贴到助手提示中；核对服务器地址后输入 <code>yes</code>，在打开的
+              OpenAI 页面授权。
+            </li>
+          </ol>
+          <Button
+            size="sm"
+            disabled={locked || !connection?.allowed}
+            onClick={() => void run("pair")}
+          >
+            {pairing ? "重新生成配对码（旧码失效）" : "生成本机配对码"}
+          </Button>
+          {pairing && (
+            <div className="space-y-2">
+              <Label htmlFor="chatgpt-pairing">一次性配对码 · 10 分钟有效 · 请勿分享</Label>
+              <textarea
+                id="chatgpt-pairing"
+                readOnly
+                value={pairing.code}
+                rows={3}
+                className="w-full resize-none rounded-md border bg-background p-2 font-mono text-xs"
+                onFocus={(event) => event.target.select()}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  void navigator.clipboard.writeText(pairing.code).then(
+                    () => setNotice("配对码已复制，请粘贴到本机助手。"),
+                    () => setError("无法自动复制，请选中配对码后手动复制。"),
+                  );
+                }}
+              >
+                复制配对码
+              </Button>
+              <p role="status" className="text-xs text-muted-foreground">
+                等待本机助手完成授权… 此页会自动检查连接，最多 10 分钟。
+              </p>
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            只使用你本人设置页生成的配对码。不要向任何页面粘贴 ChatGPT token、密码或
+            Cookie。完成后在下方选择模型并测试。
+          </p>
+        </div>
         {connection && connection.status !== "disconnected" && (
           <div className="flex flex-col gap-3">
             <div>

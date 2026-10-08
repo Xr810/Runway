@@ -29,15 +29,17 @@ const credentials: oauth.ChatGptCredentials = {
   saved_at: Date.now(),
   expires_at: Date.now() + 3600000,
 };
-function storage() {
+function storage(exchangeCode = oauth.exchangeCode) {
   return loadModule<typeof import("../lib/chatgpt")>(
     new URL("../lib/chatgpt.ts", import.meta.url),
     {
+      "node:crypto": { randomUUID },
       "./postgres": postgres,
       "./ai-config": ai,
       // Real signature/nonce validation is covered with signed JWTs in unit tests.
       "./chatgpt-oauth": {
         ...oauth,
+        exchangeCode,
         validateIdentity: async () => ({ subject: credentials.subject, email: credentials.email }),
       },
     },
@@ -225,5 +227,128 @@ test("disconnect reports remote revocation separately, erases tokens and never s
     );
     await s.selectAiSource("api-key");
     assert.equal((await ai.getAiConfig()).key, "synthetic-billable-key");
+  });
+});
+
+test("pairing is owner-bound, encrypted, replaceable, expiring, and exactly once across workers", async () => {
+  let exchanges = 0;
+  const exchange: typeof oauth.exchangeCode = async (attempt, callback) => {
+    exchanges++;
+    assert.equal(callback.searchParams.get("state"), attempt.state);
+    assert.equal(callback.searchParams.get("code"), "fixture-code");
+    assert.equal(attempt.redirect, "http://127.0.0.1:55432/auth/callback");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return credentials;
+  };
+  const s = storage(exchange);
+  const start = { action: "start" as const, host: `urn:uuid:${randomUUID()}`, port: 55432 };
+  const first = await runAsUser(owners[1], () => s.createChatGptPairing());
+  assert.equal(s.chatGptPairingOwner(first.ticket), owners[1]);
+  assert.throws(() => s.chatGptPairingOwner(first.ticket + "tampered"), /无效/);
+  await runAsUser(owners[0], () =>
+    assert.rejects(s.processChatGptPairing(first.ticket, start), /不属于/),
+  );
+  await runAsUser(owners[1], async () => {
+    const pair = await s.createChatGptPairing();
+    await assert.rejects(s.processChatGptPairing(first.ticket, start), /已使用/);
+    const result = await s.processChatGptPairing(pair.ticket, start);
+    assert(typeof result.url === "string");
+    const params = new URL(result.url).searchParams;
+    assert.equal(params.get("ext_agent_host_id"), start.host);
+    assert.equal(params.get("client_id"), "dynamic_agent_client");
+    const stored = (await pool.query("SELECT value FROM meta WHERE key='chatgpt-pairing-v1'"))
+      .rows[0].value;
+    assert(!stored.includes(pair.ticket));
+    assert(!stored.includes(params.get("state")));
+    await assert.rejects(s.processChatGptPairing(pair.ticket, start), /已启动/);
+    const callback = new URL(params.get("redirect_uri")!);
+    callback.search = new URLSearchParams({
+      state: params.get("state")!,
+      code: "fixture-code",
+    }).toString();
+    await assert.rejects(
+      s.processChatGptPairing(pair.ticket, {
+        action: "finish",
+        callback: callback.toString().replace("55432", "55433"),
+      }),
+      /不匹配/,
+    );
+    const wrong = new URL(callback);
+    wrong.searchParams.set("state", "wrong");
+    await assert.rejects(
+      s.processChatGptPairing(pair.ticket, { action: "finish", callback: wrong.toString() }),
+      /不匹配/,
+    );
+    assert.equal(exchanges, 0);
+    const results = await Promise.allSettled(
+      [s, storage(exchange)].map((instance) =>
+        instance.processChatGptPairing(pair.ticket, {
+          action: "finish",
+          callback: callback.toString(),
+        }),
+      ),
+    );
+    assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+    assert.equal(exchanges, 1);
+    assert.equal((await s.readChatGptConnection())!.pairingId, pair.id);
+    assert.equal((await ai.getAiConfig()).source, "none"); // never auto-select
+    await s.setChatGptModel("preserved-model", 1);
+    const returning = await s.createChatGptPairing();
+    const again = await s.processChatGptPairing(returning.ticket, start);
+    assert(typeof again.url === "string");
+    assert.equal(new URL(again.url).searchParams.get("client_id"), credentials.client_id);
+    assert.equal(new URL(again.url).searchParams.get("id_token_hint"), credentials.id_token);
+    // A disconnect invalidates outstanding authorizations, not just current credentials.
+    await s.disconnectChatGpt(async () => new Response(null));
+    await assert.rejects(s.processChatGptPairing(returning.ticket, start), /已使用/);
+    const expiring = await s.createChatGptPairing();
+    const realNow = Date.now;
+    Date.now = () => expiring.expiresAt;
+    try {
+      assert.throws(() => s.chatGptPairingOwner(expiring.ticket), /过期/);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+});
+
+test("pairing fails closed on uncertain code exchange, import races and live policy revocation", async () => {
+  let calls = 0;
+  const s = storage(async () => {
+    calls++;
+    throw Error("uncertain exchange");
+  });
+  const start = { action: "start" as const, host: `urn:uuid:${randomUUID()}`, port: 55432 };
+  await runAsUser(owners[1], async () => {
+    const pair = await s.createChatGptPairing();
+    const result = await s.processChatGptPairing(pair.ticket, start);
+    assert(typeof result.url === "string");
+    const url = new URL(result.url),
+      callback = new URL(url.searchParams.get("redirect_uri")!);
+    callback.searchParams.set("state", url.searchParams.get("state")!);
+    callback.searchParams.set("code", "fixture-code");
+    await assert.rejects(
+      s.processChatGptPairing(pair.ticket, { action: "finish", callback: callback.toString() }),
+      /uncertain/,
+    );
+    await assert.rejects(
+      s.processChatGptPairing(pair.ticket, { action: "finish", callback: callback.toString() }),
+      /已使用/,
+    );
+    assert.equal(calls, 1);
+    assert.equal(await s.readChatGptConnection(), null);
+    const pending = await s.createChatGptPairing();
+    await s.importChatGpt(credentials);
+    await assert.rejects(s.processChatGptPairing(pending.ticket, start), /已使用/);
+    const revoked = await s.createChatGptPairing();
+    await controlPool.query("UPDATE accounts SET ai_enabled=false WHERE id=$1", [owners[1]]);
+    await assert.rejects(s.processChatGptPairing(revoked.ticket, start), /未启用/);
+    await controlPool.query("UPDATE accounts SET ai_enabled=true WHERE id=$1", [owners[1]]);
+    process.env.AI_MODE = "managed";
+    try {
+      await assert.rejects(s.processChatGptPairing(revoked.ticket, start), /托管模式/);
+    } finally {
+      process.env.AI_MODE = "personal";
+    }
   });
 });

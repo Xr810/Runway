@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { getUser } from "@/lib/auth";
-import { validOrigin } from "@/lib/session";
+import { appOrigin, validOrigin } from "@/lib/session";
 import { getAiConfig, publicAiConfig, saveAiConfig } from "@/lib/ai-config";
 import {
   assertChatGptPolicy,
   readChatGptConnection,
   disconnectChatGpt,
   selectAiSource,
+  createChatGptPairing,
 } from "@/lib/chatgpt";
 import { callAiModel, chatGptModels } from "@/lib/ai-model";
 import { ChatGptError } from "@/lib/chatgpt-oauth";
@@ -29,6 +30,7 @@ async function status() {
     registration: connection?.credentials.client_id ?? "",
     model: connection?.model ?? "",
     revision: connection?.revision ?? 0,
+    pairingId: connection?.pairingId ?? "",
   };
 }
 export async function GET() {
@@ -41,7 +43,7 @@ export async function GET() {
 }
 const schema = z
   .object({
-    action: z.enum(["select", "api-key", "models", "save", "test", "disconnect"]),
+    action: z.enum(["select", "api-key", "models", "save", "test", "disconnect", "pair"]),
     model: z.string().max(250).optional(),
     revision: z.number().int().min(0).optional(),
   })
@@ -79,6 +81,17 @@ export async function POST(request: Request) {
   try {
     if (!(await hit("chatgpt-settings", 60, 3600)))
       return json({ error: "操作过多，请稍后重试。" }, 429);
+    if (input.action === "pair") {
+      const origin = appOrigin();
+      if (!origin.startsWith("https://"))
+        return json({ error: "自动配对需要 HTTPS Runway 地址。" }, 400);
+      const { ticket, expiresAt, id } = await createChatGptPairing();
+      return json({
+        pairing: `${origin}/api/settings/chatgpt/pair#${ticket}`,
+        expiresAt,
+        pairingId: id,
+      });
+    }
     if (input.action === "select" || input.action === "api-key")
       await selectAiSource(input.action === "select" ? "chatgpt" : "api-key");
     if (input.action === "disconnect") {
@@ -93,7 +106,7 @@ export async function POST(request: Request) {
     if (input.action === "models") return json({ models: await chatGptModels(request.signal) });
     if (input.action === "save" || input.action === "test") {
       const connection = await readChatGptConnection();
-      if (!connection) throw new ChatGptError("ChatGPT 未连接，请先完成本地授权和导入。");
+      if (!connection) throw new ChatGptError("ChatGPT 未连接，请先通过本机助手完成授权。");
       const models = await chatGptModels(request.signal),
         model = input.model ?? connection.model;
       if (!models.some((m: { id: string }) => m.id === model))

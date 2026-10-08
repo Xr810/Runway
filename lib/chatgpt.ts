@@ -1,7 +1,11 @@
+import { randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import { currentUserId, pool, controlPool } from "./postgres";
 import { sealKey, openKey } from "./ai-config";
 import {
   ChatGptError,
+  authorizationAttempt,
+  exchangeCode,
   credentialSchema,
   requireScopes,
   refreshCredentials,
@@ -12,7 +16,15 @@ import {
 
 export const chatGptKey = "chatgpt-connection-v1";
 export const aiSourceKey = "ai-source-v1";
+const pairingKey = "chatgpt-pairing-v1";
+type Pairing = {
+  id: string;
+  ticket: string;
+  expiresAt: number;
+  attempt?: ReturnType<typeof authorizationAttempt>;
+};
 type Connection = {
+  pairingId?: string;
   credentials: ChatGptCredentials;
   model: string;
   revision: number;
@@ -25,6 +37,7 @@ function decode(owner: string, value: string): Connection {
   const data = JSON.parse(openKey(value).value);
   if (data.owner !== owner) throw new ChatGptError("ChatGPT 凭据不属于当前账户。");
   return {
+    pairingId: data.pairingId,
     credentials: credentialSchema.parse(data.credentials),
     model: data.model,
     revision: data.revision,
@@ -50,6 +63,7 @@ async function locked<T>(
   work: (
     read: () => Promise<Connection | null>,
     save: (value: Connection | null) => Promise<void>,
+    db: PoolClient,
   ) => Promise<T>,
 ) {
   const owner = await assertChatGptPolicy(),
@@ -71,7 +85,7 @@ async function locked<T>(
         );
       else await db.query("DELETE FROM meta WHERE key=$1", [chatGptKey]);
     };
-    return await work(read, save);
+    return await work(read, save, db);
   } finally {
     try {
       await db.query("SELECT pg_advisory_unlock(hashtextextended($1,0))", [lock]);
@@ -82,18 +96,98 @@ async function locked<T>(
     db.release();
   }
 }
+// The ticket grants only one short-lived connection attempt, never ordinary API access.
+export function chatGptPairingOwner(ticket: string) {
+  try {
+    const value = JSON.parse(openKey(ticket).value);
+    if (
+      value.purpose !== pairingKey ||
+      typeof value.owner !== "string" ||
+      !Number.isFinite(value.expiresAt) ||
+      value.expiresAt <= Date.now()
+    )
+      throw Error();
+    return value.owner as string;
+  } catch {
+    throw new ChatGptError("配对码无效或已过期，请在设置页重新生成。");
+  }
+}
+export async function createChatGptPairing() {
+  if (!process.env.AI_SETTINGS_KEY || process.env.AI_SETTINGS_KEY.length < 32)
+    throw new ChatGptError("服务器必须配置至少 32 字符的独立 AI_SETTINGS_KEY。");
+  const owner = await assertChatGptPolicy();
+  return locked(async (_read, _save, db) => {
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    const id = randomUUID();
+    const ticket = sealKey(JSON.stringify({ purpose: pairingKey, owner, expiresAt, id }));
+    await db.query(
+      "INSERT INTO meta(user_id,key,value) VALUES($1,$2,$3) ON CONFLICT(user_id,key) DO UPDATE SET value=EXCLUDED.value",
+      [owner, pairingKey, sealKey(JSON.stringify({ id, ticket, expiresAt }))],
+    );
+    return { ticket, expiresAt, id };
+  });
+}
+export async function processChatGptPairing(
+  ticket: string,
+  input: { action: "start"; host: string; port: number } | { action: "finish"; callback: string },
+) {
+  const owner = chatGptPairingOwner(ticket);
+  if (owner !== (await currentUserId())) throw new ChatGptError("配对码不属于当前账户。");
+  return locked(async (read, save, db) => {
+    const row = await db.query("SELECT value FROM meta WHERE key=$1", [pairingKey]);
+    const pending: Pairing | null = row.rowCount
+      ? JSON.parse(openKey(row.rows[0].value).value)
+      : null;
+    if (!pending || pending.ticket !== ticket || pending.expiresAt <= Date.now())
+      throw new ChatGptError("配对码已使用、取消或过期，请在设置页重新生成。");
+    const old = await read();
+    if (input.action === "start") {
+      if (pending.attempt) throw new ChatGptError("此配对码已启动授权，请重新生成后重试。");
+      pending.attempt = authorizationAttempt(
+        input.host,
+        `http://127.0.0.1:${input.port}/auth/callback`,
+        old?.credentials,
+      );
+      await db.query("UPDATE meta SET value=$2 WHERE key=$1", [
+        pairingKey,
+        sealKey(JSON.stringify(pending)),
+      ]);
+      return { url: pending.attempt.url };
+    }
+    const callback = new URL(input.callback);
+    const attempt = pending.attempt;
+    if (
+      !attempt ||
+      callback.origin + callback.pathname !== attempt.redirect ||
+      callback.searchParams.get("state") !== attempt.state
+    )
+      throw new ChatGptError("授权回调不匹配，请重新授权。");
+    // Consume before exchanging a single-use code. An uncertain outcome requires a new attempt.
+    await db.query("DELETE FROM meta WHERE key=$1", [pairingKey]);
+    const credentials = await exchangeCode(attempt, callback);
+    await save({
+      pairingId: pending.id,
+      credentials,
+      model: old?.model ?? "",
+      revision: (old?.revision ?? 0) + 1,
+      status: "connected",
+    });
+    return { connected: true };
+  });
+}
 export async function importChatGpt(credentials: ChatGptCredentials) {
   const parsed = credentialSchema.parse(credentials);
   requireScopes(parsed.scopes);
   await validateIdentity(parsed.id_token, parsed.client_id, undefined, parsed.subject);
   if (parsed.expires_at <= Date.now()) throw new ChatGptError("请使用刚完成本地授权的转移文件。");
-  await locked(async (read, save) => {
+  await locked(async (read, save, db) => {
     const old = await read();
     if (
       old &&
       (old.credentials.client_id !== parsed.client_id || old.credentials.subject !== parsed.subject)
     )
       throw new ChatGptError("请先断开原 ChatGPT 注册，再导入不同账号或工作区。");
+    await db.query("DELETE FROM meta WHERE key=$1", [pairingKey]);
     await save({
       credentials: parsed,
       model: old?.model ?? "",
@@ -105,7 +199,7 @@ export async function importChatGpt(credentials: ChatGptCredentials) {
 export async function chatGptToken(fetcher = fetch) {
   return locked(async (read, save) => {
     const connection = await read();
-    if (!connection) throw new ChatGptError("ChatGPT 未连接，请先在本地授权并导入凭据。");
+    if (!connection) throw new ChatGptError("ChatGPT 未连接，请在设置页通过本机助手完成授权。");
     if (connection.status !== "connected")
       throw new ChatGptError(
         "ChatGPT 授权失效或刷新结果不确定，请重新授权，不能自动重用旧刷新凭据。",
@@ -141,7 +235,8 @@ export async function setChatGptModel(model: string, revision: number) {
   });
 }
 export async function disconnectChatGpt(fetcher = fetch) {
-  return locked(async (read, save) => {
+  return locked(async (read, save, db) => {
+    await db.query("DELETE FROM meta WHERE key=$1", [pairingKey]);
     let readable = true;
     const connection = await read().catch(() => {
       readable = false;
