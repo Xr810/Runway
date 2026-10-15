@@ -342,6 +342,7 @@ export default function EntryDetail() {
                                       {item.type === "assessment"
                                         ? `通知 ${formatDay(item.receivedDate) || "未设置"} · ${item.deadlineDate ? "公司截止" : "应用计划期限"} ${formatDay(stageDueDate(item, data.reminderPreferences.assessment.planDays)) || "未设置（缺少通知日期）"}${item.completedAt ? ` · 完成 ${formatDay(appointmentDate(item.completedAt))}` : ""}`
                                         : `${formatDay(appointmentDate(item.startsAt))} ${appointmentTime(item.startsAt)}${item.endsAt ? "–" + appointmentTime(item.endsAt) : ""}`}
+                                      {" · 香港时间（UTC+8）"}
                                       {item.location ? " · " + item.location : ""}
                                     </p>
                                     <div className="mt-1 h-1.5 overflow-hidden rounded bg-muted">

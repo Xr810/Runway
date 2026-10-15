@@ -34,6 +34,7 @@ export function TodayReminders() {
   const items = reminders.today, left = items.filter(r => !r.done).length;
   return <Panel title="今日提醒" description={items.length ? (left ? `还有 ${left} 项` : "今天的都完成了") : undefined}
     action={<div className="flex gap-1"><Button variant="ghost" size="xs" onClick={() => setEditing(blank())}><Plus />新增</Button><Button variant="ghost" size="xs" onClick={() => setManaging(true)}>管理</Button></div>} bodyClassName="p-0">
+    <p className="border-b px-4 py-2 text-xs text-muted-foreground">香港时间（UTC+8）·「今日」以香港 00:00 换日。</p>
     {items.length ? <ul>{items.map(r => { const late = !r.done && r.schedule.time && r.schedule.time < clock; return <li key={r.id} className={cn("flex items-start gap-3 border-b px-4 py-2.5 last:border-b-0", r.done && "opacity-60")}>
       <Checkbox className="mt-0.5" checked={r.done} disabled={busy === r.id} aria-label={"完成 " + r.title} onCheckedChange={v => void toggle(r.id, v === true)} />
       <div className="min-w-0 flex-1">
@@ -60,7 +61,7 @@ function ReminderManager({ open, onOpenChange, onEdit }: { open: boolean; onOpen
   async function remove(r: Reminder) { if (!window.confirm(`删除提醒「${r.title}」？`)) return; setBusy(true); try { await postJson("/api/reminders", { action: "delete", id: r.id }); await reloadReminders(); toast.success("已删除"); } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); } }
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg">
-      <DialogHeader><DialogTitle>全部提醒</DialogTitle><DialogDescription>暂停的提醒不会出现在「今日」页。</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>全部提醒</DialogTitle><DialogDescription>日期和时间均为香港时间（UTC+8）。暂停的提醒不会出现在「今日」页。</DialogDescription></DialogHeader>
       {reminders.reminders.length ? <ul className="overflow-hidden rounded-lg border">{reminders.reminders.map(r => { const { description, ...reminder } = r; return <li key={r.id} className="flex items-center gap-3 border-b px-3 py-2.5 last:border-b-0">
         <div className="min-w-0 flex-1"><p className={cn("truncate text-sm", !r.active && "text-muted-foreground")}>{r.title}</p><p className="text-xs text-muted-foreground">{description}{r.source === "ai" ? " · AI 创建" : ""}</p></div>
         <Switch checked={r.active} disabled={busy} aria-label={(r.active ? "暂停 " : "启用 ") + r.title} onCheckedChange={v => void save({ ...reminder, active: v })} />
@@ -107,6 +108,7 @@ export function ReminderEditor({ value, onChange }: { value: Reminder | null; on
         <div className="grid gap-2"><Label>重复</Label>
           <RepeatControl key={value.id} schedule={s} onChange={setSchedule} />
         </div>
+        <p className="text-xs text-muted-foreground">日期和时间均按香港时间（UTC+8）填写，不随设备时区转换。「今日」以香港 00:00 换日。</p>
         <div className="grid grid-cols-2 gap-3">
           {s.type === "once" ? <div className="grid gap-1.5"><Label htmlFor="r-date">日期</Label><Input id="r-date" type="date" required value={s.date} onChange={e => setSchedule({ ...s, date: e.target.value })} /></div>
             : <div className="grid gap-1.5"><Label htmlFor="r-until">截止（可选）</Label><Input id="r-until" type="date" value={s.until} onChange={e => setSchedule({ ...s, until: e.target.value })} /></div>}
