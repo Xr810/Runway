@@ -103,7 +103,9 @@ export default function TodayView() {
   return (
     <>
       <header className="pb-6">
-        <p className="text-sm text-muted-foreground">{formatDay(today())}</p>
+        <p className="text-sm text-muted-foreground">
+          {formatDay(today())} · 香港时间（UTC+8，以香港 00:00 换日）
+        </p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">{greeting()}</h1>
       </header>
       <DailyBrief />
@@ -176,11 +178,11 @@ export default function TodayView() {
                             </Pill>
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-medium">{ev.entry.title}</p>
-                              <p className="truncate text-xs text-muted-foreground">
+                              <p className="text-xs break-words whitespace-normal text-muted-foreground">
                                 <span className="sm:hidden">{ev.label} · </span>
                                 {ev.time && (
                                   <span className="tabular font-medium text-foreground">
-                                    {ev.time} ·{" "}
+                                    {ev.time}（香港 UTC+8）·{" "}
                                   </span>
                                 )}
                                 {ev.detail ||
