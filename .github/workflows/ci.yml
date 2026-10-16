@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Unit, lint, and types
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AI_MODE: personal
+      SCHEDULER: "off"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Unit tests (no database or model credentials)
+        run: npm test
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        run: npx tsc --noEmit
