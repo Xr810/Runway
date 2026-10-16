@@ -178,7 +178,7 @@ export default function TodayView() {
                             </Pill>
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-medium">{ev.entry.title}</p>
-                              <p className="truncate text-xs text-muted-foreground">
+                              <p className="text-xs break-words whitespace-normal text-muted-foreground">
                                 <span className="sm:hidden">{ev.label} · </span>
                                 {ev.time && (
                                   <span className="tabular font-medium text-foreground">
