@@ -41,8 +41,8 @@ export default function ProgressDialog({ draft, onChange }: { draft: ProgressDra
     <DialogContent className="sm:max-w-lg">
       <DialogHeader><DialogTitle>{editing ? "编辑记录" : milestone ? "记录里程碑" : "记录进度"}</DialogTitle><DialogDescription>{entry?.title} · 一天可以记录多次，也可以补记以前的日期。</DialogDescription></DialogHeader>
       {draft && <form id="progress-form" className="grid gap-4 sm:grid-cols-2" onSubmit={e => { e.preventDefault(); void save(); }}>
-        <label className={cn("flex items-center gap-3 rounded-lg border px-3 py-2.5 sm:col-span-2", milestone && "border-amber-500/40 bg-amber-50 dark:bg-amber-400/10")}>
-          <Flag className={cn("size-4", milestone ? "fill-amber-500 text-amber-500" : "text-muted-foreground")} />
+        <label className={cn("flex items-center gap-3 rounded-lg border px-3 py-2.5 sm:col-span-2", milestone && "border-warning/30 bg-warning/10")}>
+          <Flag className={cn("size-4", milestone ? "fill-warning text-warning" : "text-muted-foreground")} />
           <span className="flex-1"><span className="block text-sm font-medium">标记为里程碑</span><span className="block text-xs text-muted-foreground">{project ? "上线、发布、完成一个阶段…" : "提交、晋级、拿到名次…"} 会在热力图和时间线上单独标出</span></span>
           <Switch checked={milestone} onCheckedChange={v => onChange({ ...draft, milestone: v })} aria-label="标记为里程碑" />
         </label>

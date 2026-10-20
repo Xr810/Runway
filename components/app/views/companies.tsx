@@ -270,7 +270,7 @@ export default function CompaniesView() {
                 <button
                   key={c.key}
                   onClick={() => setSelected({ type: "company", key: c.key })}
-                  className="group flex flex-col gap-3 rounded-xl border bg-card p-4 text-left transition-colors hover:border-primary/40"
+                  className="group flex flex-col gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:border-primary/40"
                 >
                   <div className="flex items-start gap-3">
                     <CompanyMark name={c.name} src={logoFor(c.name)} size="lg" />
@@ -337,7 +337,7 @@ export default function CompaniesView() {
               {boards
                 .filter((b) => b.company.toLowerCase().includes(q))
                 .map((b) => (
-                  <article key={b.id} className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+                  <article key={b.id} className="flex flex-col gap-3 rounded-lg border bg-card p-4">
                     <div className="flex items-start gap-3">
                       <span className="inline-flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                         <SearchCode className="size-4" />
@@ -421,10 +421,10 @@ export default function CompaniesView() {
                   <button
                     key={c.name}
                     onClick={() => setSelected({ type: "channel", key: identity(c.name) })}
-                    className="group flex items-center gap-3 rounded-xl border bg-card p-4 text-left transition-colors hover:border-primary/40"
+                    className="group flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:border-primary/40"
                   >
                     {c.name === "公司官网" ? (
-                      <span className="inline-flex size-12 items-center justify-center rounded-xl bg-muted text-muted-foreground ring-1 ring-border ring-inset">
+                      <span className="inline-flex size-12 items-center justify-center rounded-lg bg-muted text-muted-foreground ring-1 ring-border ring-inset">
                         <Building2 className="size-5" />
                       </span>
                     ) : (
@@ -451,7 +451,7 @@ export default function CompaniesView() {
           {unassigned.length > 0 && (
             <button
               onClick={() => setSelected({ type: "channel", key: "__unknown" })}
-              className="mt-4 flex w-full items-center gap-3 rounded-xl border border-dashed px-4 py-3 text-left text-sm hover:border-primary/40"
+              className="mt-4 flex w-full items-center gap-3 rounded-lg border border-dashed px-4 py-3 text-left text-sm hover:border-primary/40"
             >
               <span className="text-muted-foreground">
                 <b className="tabular font-semibold text-foreground">{unassigned.length}</b>{" "}
@@ -480,7 +480,7 @@ export default function CompaniesView() {
                   {company ? (
                     <CompanyMark name={company.name} src={logoFor(company.name)} size="lg" />
                   ) : (
-                    <span className="inline-flex size-12 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                    <span className="inline-flex size-12 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                       <Globe className="size-5" />
                     </span>
                   )}

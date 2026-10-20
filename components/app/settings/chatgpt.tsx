@@ -188,7 +188,7 @@ export default function ChatGptSettings({
           </p>
         )}
         {notice && (
-          <p role="status" className="text-emerald-700 dark:text-emerald-300">
+          <p role="status" className="text-success">
             {notice}
           </p>
         )}
@@ -261,7 +261,7 @@ export default function ChatGptSettings({
                 readOnly
                 value={pairing.code}
                 rows={3}
-                className="w-full resize-none rounded-md border bg-background p-2 font-mono text-xs"
+                className="w-full resize-none rounded-md border bg-card p-2 font-mono text-xs"
                 onFocus={(event) => event.target.select()}
               />
               <Button
@@ -303,7 +303,7 @@ export default function ChatGptSettings({
             </Label>
             <select
               id="chatgpt-model"
-              className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+              className="h-8 w-full rounded-md border border-input bg-card px-2.5 text-sm"
               value={model}
               disabled={locked || unavailable}
               onChange={(event) => setModel(event.target.value)}

@@ -2,14 +2,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  AlarmClock,
   ArrowRight,
   ArrowUp,
-  Bell,
   CalendarCheck2,
+  CircleCheck,
   Flag,
   FolderKanban,
-  Hourglass,
   LoaderCircle,
   Plus,
   RefreshCw,
@@ -21,18 +19,18 @@ import { isApplied, timelineEvents } from "@/lib/journey";
 import { Button } from "@/components/ui/button";
 import { useDesk, readJson, postJson } from "../store";
 import { useAssistantPanel } from "../assistant-panel-context";
-import { useNotifications } from "../notifications-context";
 import { TodayReminders } from "../reminders";
 import {
   CompanyMark,
   EmptyState,
+  HkTime,
   Panel,
-  Pill,
   Stat,
+  StatStrip,
   formatDay,
   kindCopy,
   relativeDay,
-  stamp,
+  textTones,
   type Tone,
 } from "../ui";
 import ProgressDialog, { newProgress, type ProgressDraft } from "../progress-dialog";
@@ -60,7 +58,6 @@ const inStages = (e: Entry, statuses: string[]) => statuses.includes(e.status);
 
 export default function TodayView() {
   const { data, loading, openEntry, newEntry, logoFor } = useDesk();
-  const { notifications, setNotificationsOpen } = useNotifications();
   const [progress, setProgress] = useState<ProgressDraft | null>(null);
   const reminderPreferences = data.reminderPreferences;
   const open = data.entries.filter((e) => !closed(e)),
@@ -100,25 +97,29 @@ export default function TodayView() {
     .filter((e) => e.kind === "competition" || e.kind === "project")
     .sort((a, b) => lastActivity(b).localeCompare(lastActivity(a)));
 
+  const inInterviews = jobs.filter((e) => inStages(e, ["一面", "二面", "终面"])).length;
+
   return (
     <>
-      <header className="pb-6">
-        <p className="text-sm text-muted-foreground">
-          {formatDay(today())} · 香港时间（UTC+8，以香港 00:00 换日）
+      <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pb-5">
+        <h1 className="text-xl font-semibold tracking-tight">{greeting()}</h1>
+        <p
+          className="text-sm text-muted-foreground"
+          title="香港时间（UTC+8），「今日」以香港 00:00 换日"
+        >
+          {formatDay(today())} · 香港时间
         </p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">{greeting()}</h1>
       </header>
       <DailyBrief />
-      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <StatStrip className="mt-4">
         <Stat
           label="进行中的申请"
           value={loading ? "–" : jobs.filter((e) => !inStages(e, ["待投递"])).length}
-          hint={`${jobs.filter((e) => inStages(e, ["一面", "二面", "终面"])).length} 个在面试阶段`}
+          hint={inInterviews ? `${inInterviews} 个在面试阶段` : "暂无面试阶段"}
         />
         <Stat
           label="待投递"
           value={loading ? "–" : jobs.filter((e) => e.status === "待投递").length}
-          hint="还没提交的岗位"
         />
         <Stat
           label="7 天内截止"
@@ -126,15 +127,15 @@ export default function TodayView() {
           tone={dueSoon ? "warn" : "default"}
           hint="岗位与比赛"
         />
-        <Stat label="待进行的面试 / 笔试" value={loading ? "–" : interviews} hint="已预约的日程" />
-      </div>
+        <Stat label="待进行的面试 / 笔试" value={loading ? "–" : interviews} />
+      </StatStrip>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <Panel
           title="接下来两周"
-          description="截止、跟进、面试与笔试"
+          description={events.length ? `${events.length} 项安排` : undefined}
           action={
-            <Button variant="ghost" size="xs" asChild>
+            <Button variant="ghost" size="xs" className="text-muted-foreground" asChild>
               <Link href="/schedule">
                 完整日程
                 <ArrowRight />
@@ -145,57 +146,71 @@ export default function TodayView() {
         >
           {days.length ? (
             <ol>
-              {days.map((date) => (
-                <li
-                  key={date}
-                  className="grid grid-cols-[84px_minmax(0,1fr)] border-b last:border-b-0 sm:grid-cols-[112px_minmax(0,1fr)]"
-                >
-                  <div className={cn("border-r px-4 py-3", dayDiff(date) === 0 && "bg-accent/50")}>
-                    <p
-                      className={cn(
-                        "tabular text-sm font-semibold whitespace-nowrap",
-                        dayDiff(date) === 0 && "text-primary",
-                      )}
-                    >
-                      {formatDay(date, false)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{relativeDay(date)}</p>
-                  </div>
-                  <ul className="flex flex-col py-1.5">
-                    {events
-                      .filter((e) => e.date === date)
-                      .map((ev) => (
-                        <li key={ev.id}>
-                          <button
-                            onClick={() => openEntry(ev.entry.id)}
-                            className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-muted/50"
-                          >
-                            <Pill
-                              tone={eventTone[ev.type] ?? "gray"}
-                              className="hidden w-[68px] justify-center sm:inline-flex"
+              {days.map((date) => {
+                const isToday = dayDiff(date) === 0;
+                return (
+                  <li
+                    key={date}
+                    className="grid grid-cols-[76px_minmax(0,1fr)] border-b last:border-b-0 sm:grid-cols-[96px_minmax(0,1fr)]"
+                  >
+                    <div className="px-4 py-2.5">
+                      <p
+                        className={cn(
+                          "tabular text-sm font-medium whitespace-nowrap",
+                          isToday && "text-primary",
+                        )}
+                      >
+                        {formatDay(date, false)}
+                      </p>
+                      <p className="text-xs text-faint">{relativeDay(date)}</p>
+                    </div>
+                    <ul className="flex flex-col py-1">
+                      {events
+                        .filter((e) => e.date === date)
+                        .map((ev) => (
+                          <li key={ev.id}>
+                            <button
+                              onClick={() => openEntry(ev.entry.id)}
+                              className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 rounded-md px-3 py-1.5 text-left hover:bg-muted/60 sm:grid-cols-[88px_minmax(0,1fr)_auto]"
                             >
-                              {ev.label.replace(" / ", "/")}
-                            </Pill>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium">{ev.entry.title}</p>
-                              <p className="text-xs break-words whitespace-normal text-muted-foreground">
-                                <span className="sm:hidden">{ev.label} · </span>
-                                {ev.time && (
-                                  <span className="tabular font-medium text-foreground">
-                                    {ev.time}（香港 UTC+8）·{" "}
-                                  </span>
+                              <span
+                                className={cn(
+                                  "hidden truncate text-xs font-medium sm:block",
+                                  textTones[eventTone[ev.type] ?? "gray"],
                                 )}
-                                {ev.detail ||
-                                  ev.entry.organization ||
-                                  kindCopy[ev.entry.kind].orgEmpty}
-                              </p>
-                            </div>
-                          </button>
-                        </li>
-                      ))}
-                  </ul>
-                </li>
-              ))}
+                              >
+                                {ev.label.replace(" / ", "/")}
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-medium">
+                                  {ev.entry.title}
+                                </span>
+                                <span className="block truncate text-xs text-muted-foreground">
+                                  <span
+                                    className={cn(
+                                      "sm:hidden",
+                                      textTones[eventTone[ev.type] ?? "gray"],
+                                    )}
+                                  >
+                                    {ev.label} ·{" "}
+                                  </span>
+                                  {ev.detail ||
+                                    ev.entry.organization ||
+                                    kindCopy[ev.entry.kind].orgEmpty}
+                                </span>
+                              </span>
+                              {ev.time ? (
+                                <HkTime time={ev.time} className="text-sm font-medium" />
+                              ) : (
+                                <span />
+                              )}
+                            </button>
+                          </li>
+                        ))}
+                    </ul>
+                  </li>
+                );
+              })}
             </ol>
           ) : (
             <EmptyState
@@ -207,16 +222,19 @@ export default function TodayView() {
           )}
         </Panel>
 
-        <div className="flex flex-col gap-6">
-          <TodayReminders />
-          <Panel title="需要处理" description="逾期跟进、错过的截止、久未回复" bodyClassName="p-0">
+        <div className="flex flex-col gap-4">
+          <Panel
+            title="需要处理"
+            description={attention.length ? `${attention.length} 项` : undefined}
+            bodyClassName="p-0"
+          >
             {attention.length ? (
               <ul>
                 {attention.slice(0, 6).map(({ entry, reason }) => (
                   <li key={entry.id} className="border-b last:border-b-0">
                     <button
                       onClick={() => openEntry(entry.id)}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/50"
+                      className="flex w-full items-center gap-2.5 px-4 py-2 text-left hover:bg-muted/50"
                     >
                       <CompanyMark
                         name={entry.organization || entry.title}
@@ -225,19 +243,16 @@ export default function TodayView() {
                       />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{entry.title}</p>
-                        <p className="flex items-center gap-1 truncate text-xs text-amber-700 dark:text-amber-400">
-                          <AlarmClock className="size-3 shrink-0" />
-                          {reason}
-                        </p>
+                        <p className="truncate text-xs text-warning">{reason}</p>
                       </div>
                     </button>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="flex items-center gap-2 px-4 py-6 text-sm text-muted-foreground">
-                <Hourglass className="size-4" />
-                没有逾期事项。
+              <p className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
+                <CircleCheck className="size-4 text-success" />
+                没有逾期事项
               </p>
             )}
             {attention.length > 6 && (
@@ -247,58 +262,12 @@ export default function TodayView() {
             )}
           </Panel>
 
-          <Panel
-            title="最近更新"
-            action={
-              <Button variant="ghost" size="xs" onClick={() => setNotificationsOpen(true)}>
-                全部
-                <ArrowRight />
-              </Button>
-            }
-            bodyClassName="p-0"
-          >
-            {notifications.items.length ? (
-              <ul>
-                {notifications.items.slice(0, 4).map((n) => (
-                  <li key={n.id} className="border-b last:border-b-0">
-                    <button
-                      onClick={() =>
-                        n.entryId ? openEntry(n.entryId) : setNotificationsOpen(true)
-                      }
-                      className="flex w-full gap-3 px-4 py-2.5 text-left hover:bg-muted/50"
-                    >
-                      <span
-                        className={cn(
-                          "mt-1.5 size-1.5 shrink-0 rounded-full",
-                          n.read ? "bg-transparent" : "bg-primary",
-                        )}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm">
-                          {n.organization ? n.organization + " · " : ""}
-                          {n.title}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">{n.summary}</p>
-                      </div>
-                      <time className="shrink-0 text-[11px] text-muted-foreground">
-                        {stamp(n.created).split(" ")[0]}
-                      </time>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="flex items-center gap-2 px-4 py-6 text-sm text-muted-foreground">
-                <Bell className="size-4" />
-                暂无更新。
-              </p>
-            )}
-          </Panel>
+          <TodayReminders />
 
           <Panel
             title="项目与比赛"
             action={
-              <Button variant="ghost" size="xs" asChild>
+              <Button variant="ghost" size="xs" className="text-muted-foreground" asChild>
                 <Link href="/projects">
                   全部
                   <ArrowRight />
@@ -320,15 +289,15 @@ export default function TodayView() {
                   return (
                     <li
                       key={c.id}
-                      className="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0"
+                      className="group flex items-center gap-2.5 border-b px-4 py-2 last:border-b-0"
                     >
-                      <KindIcon kind={c.kind} className="size-7 rounded-md [&_svg]:size-3.5" />
+                      <KindIcon kind={c.kind} className="size-6 rounded-md [&_svg]:size-3.5" />
                       <button className="min-w-0 flex-1 text-left" onClick={() => openEntry(c.id)}>
                         <p className="truncate text-sm font-medium">{c.title}</p>
                         <p className="truncate text-xs text-muted-foreground">
                           {milestone ? (
-                            <span className="text-amber-700 dark:text-amber-400">
-                              <Flag className="mr-1 inline size-3 -translate-y-px fill-current" />
+                            <span>
+                              <Flag className="mr-1 inline size-3 -translate-y-px fill-warning text-warning" />
                               {milestone[1].split("\n")[0]} · {relativeDay(milestone[0])}
                             </span>
                           ) : last ? (
@@ -339,28 +308,24 @@ export default function TodayView() {
                         </p>
                       </button>
                       <Button
-                        variant="outline"
-                        size="xs"
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label={`记录 ${c.title} 的进度`}
+                        className="text-muted-foreground"
                         onClick={() => setProgress(newProgress(c))}
                       >
                         <Plus />
-                        记录
                       </Button>
                     </li>
                   );
                 })}
               </ul>
             ) : (
-              <div className="px-4 py-5">
-                <p className="text-sm text-muted-foreground">还没有进行中的项目或比赛。</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3"
-                  onClick={() => newEntry("project")}
-                >
-                  <FolderKanban />
-                  添加项目
+              <div className="flex items-center justify-between gap-2 px-4 py-3">
+                <p className="text-sm text-muted-foreground">还没有进行中的项目</p>
+                <Button variant="outline" size="xs" onClick={() => newEntry("project")}>
+                  <Plus />
+                  添加
                 </Button>
               </div>
             )}
@@ -431,16 +396,14 @@ function DailyBrief() {
     };
   }, [data, loading, empty]);
   return (
-    <section className="overflow-hidden rounded-xl border border-primary/15 bg-gradient-to-br from-accent/70 via-card to-card shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-      <div className="flex items-start gap-3 px-4 pt-4">
-        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <Sparkles className="size-4" />
-        </span>
+    <section className="overflow-hidden rounded-lg border bg-card shadow-panel">
+      <div className="flex items-start gap-3 px-4 pt-3.5">
+        <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-accent-foreground/80">
+          <p className="text-xs text-muted-foreground">
             {empty ? "开始使用" : configured ? "AI 今日建议" : "今日建议 · 根据记录生成"}
           </p>
-          <p className="mt-0.5 text-[15px] font-semibold">
+          <p className="mt-0.5 text-sm font-semibold">
             {empty
               ? "添加第一条记录后，这里每天会给出建议"
               : busy && !brief
@@ -451,7 +414,8 @@ function DailyBrief() {
         {!empty && (
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="icon-xs"
+            className="text-muted-foreground"
             aria-label="重新生成"
             disabled={busy}
             onClick={() => void generate()}
@@ -461,7 +425,7 @@ function DailyBrief() {
         )}
       </div>
       {empty && (
-        <div className="mt-3 flex flex-wrap gap-2 px-4">
+        <div className="mt-3 flex flex-wrap gap-2 px-4 pl-11">
           <Button size="sm" onClick={() => newEntry("job")}>
             <Plus />
             添加岗位
@@ -473,34 +437,32 @@ function DailyBrief() {
         </div>
       )}
       {!empty && brief && brief.items.length > 0 && (
-        <ol className="mt-2 flex flex-col px-4">
+        <ol className="mt-1.5 grid gap-x-6 px-4 pl-11 sm:grid-cols-2">
           {brief.items.map((item, i) => (
-            <li key={i} className="flex items-start gap-2.5 py-1.5 text-sm">
+            <li key={i} className="flex min-w-0 items-start gap-2 py-1 text-sm">
               <span
                 className={cn(
-                  "mt-1.5 size-1.5 shrink-0 rounded-full",
-                  item.priority === "high" ? "bg-red-500" : "bg-primary/50",
+                  "mt-[7px] size-1.5 shrink-0 rounded-full",
+                  item.priority === "high" ? "bg-danger" : "bg-faint",
                 )}
               />
               {item.entryId ? (
                 <button
-                  className="text-left hover:text-primary hover:underline"
+                  className="min-w-0 text-left hover:text-primary"
                   onClick={() => openEntry(item.entryId!)}
                 >
                   {item.text}
                 </button>
               ) : (
-                <span>{item.text}</span>
+                <span className="min-w-0">{item.text}</span>
               )}
             </li>
           ))}
         </ol>
       )}
-      {error && brief && (
-        <p className="px-4 pt-1 text-xs text-red-600 dark:text-red-400">{error}</p>
-      )}
+      {error && brief && <p className="px-4 pt-1 pl-11 text-xs text-danger">{error}</p>}
       <form
-        className="m-3 mt-3 flex items-center gap-2 rounded-lg border bg-background px-3 py-1.5 focus-within:border-primary/50"
+        className="mt-3 flex items-center gap-2 border-t bg-muted/30 px-4 py-2"
         onSubmit={(e) => {
           e.preventDefault();
           if (ask.trim()) {
@@ -511,7 +473,7 @@ function DailyBrief() {
       >
         <input
           aria-label="告诉 AI 助手"
-          className="h-7 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          className="h-7 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-faint"
           placeholder="告诉 AI：贴岗位链接、设提醒…"
           value={ask}
           onChange={(e) => setAsk(e.target.value)}

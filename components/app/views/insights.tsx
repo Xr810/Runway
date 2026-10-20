@@ -23,6 +23,7 @@ import {
   Panel,
   Segmented,
   Stat,
+  StatStrip,
   jobStages,
   solidTones,
 } from "../ui";
@@ -122,7 +123,7 @@ function Overview({
   });
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <StatStrip>
         <Stat
           label="岗位总数"
           value={jobs.length}
@@ -144,16 +145,16 @@ function Overview({
           tone={offers.length ? "good" : "default"}
           hint={`面试后转化 ${pct(offers.length, screened.length)}`}
         />
-      </div>
+      </StatStrip>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Panel title="各阶段岗位数">
-          <ul className="flex flex-col gap-3">
+          <ul className="flex flex-col gap-2.5">
             {stages.map((s) => (
               <li key={s.key} className="grid grid-cols-[64px_1fr_32px] items-center gap-3 text-sm">
                 <span className="text-muted-foreground">{s.label}</span>
-                <span className="h-6 overflow-hidden rounded-md bg-muted">
+                <span className="h-2 overflow-hidden rounded-full bg-muted">
                   <span
-                    className={cn("block h-full rounded-md", solidTones[s.tone])}
+                    className={cn("block h-full rounded-full", solidTones[s.tone])}
                     style={{ width: `${Math.max(s.count ? 6 : 0, (s.count / max) * 100)}%` }}
                   />
                 </span>
@@ -176,7 +177,7 @@ function Overview({
                       <span
                         className={cn(
                           "absolute inset-y-0 left-0 rounded-full",
-                          days >= 14 ? "bg-amber-500" : "bg-primary/60",
+                          days >= 14 ? "bg-warning" : "bg-primary/60",
                         )}
                         style={{ width: `${(days / maxWait) * 100}%` }}
                       />
@@ -188,9 +189,7 @@ function Overview({
                     <span
                       className={cn(
                         "tabular text-right text-xs",
-                        days >= 14
-                          ? "font-medium text-amber-700 dark:text-amber-400"
-                          : "text-muted-foreground",
+                        days >= 14 ? "font-medium text-warning" : "text-muted-foreground",
                       )}
                     >
                       {days} 天

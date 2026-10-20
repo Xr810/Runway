@@ -17,7 +17,8 @@ import {
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
-import { type Entry, score, statusesFor } from "@/lib/model";
+import { cn } from "@/lib/utils";
+import { type Entry, dayDiff, score, statusesFor } from "@/lib/model";
 import { appointmentDate, appointmentTime, stageDueDate, stageProgress } from "@/lib/appointments";
 import { effectiveFollowUp } from "@/lib/recruiting-reminders";
 import { today } from "@/lib/model";
@@ -41,13 +42,17 @@ import { useDesk } from "./store";
 import {
   CompanyMark,
   EmptyState,
-  Facts,
+  HkTime,
   Pill,
+  PriorityIcon,
+  keyDate,
+  Properties,
   ScoreValue,
+  SectionLabel,
+  dueTone,
   formatDay,
   kindCopy,
   relativeDay,
-  toneOf,
   StatusBadge,
 } from "./ui";
 import { KindIcon } from "./views/projects";
@@ -78,30 +83,36 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-          {title}
-        </h3>
-        {action}
-      </div>
+    <section className="flex flex-col gap-2">
+      <SectionLabel action={action}>{title}</SectionLabel>
       {children}
     </section>
   );
 }
-function DateCell({ label, value }: { label: string; value: string }) {
+function DateValue({ value, note }: { value: string; note?: string }) {
+  if (!value) return null;
   return (
-    <div className="rounded-lg border bg-card px-3 py-2.5">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      {value ? (
-        <>
-          <p className="tabular mt-0.5 text-sm font-medium">{formatDay(value)}</p>
-          <p className="text-xs text-muted-foreground">{relativeDay(value)}</p>
-        </>
-      ) : (
-        <p className="mt-0.5 text-sm text-muted-foreground">未设置</p>
-      )}
-    </div>
+    <span className="inline-flex flex-wrap items-baseline gap-x-2">
+      <span className={cn("tabular font-medium", dueTone(value))}>{formatDay(value)}</span>
+      <span className="text-xs text-muted-foreground">
+        {relativeDay(value)}
+        {note ? ` · ${note}` : ""}
+      </span>
+    </span>
+  );
+}
+function ExternalValue({ href, label }: { href: string; label?: string }) {
+  if (!href) return null;
+  return (
+    <a
+      className="inline-flex max-w-full items-center gap-1 text-primary hover:underline"
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+    >
+      <span className="truncate">{label ?? href.replace(/^https?:\/\//, "")}</span>
+      <ExternalLink className="size-3 shrink-0" />
+    </a>
   );
 }
 
@@ -129,6 +140,9 @@ export default function EntryDetail() {
   const effective = entry ? effectiveFollowUp(entry, data.reminderPreferences) : null;
   const followUp = isJob ? effective?.date || "" : entry?.followUp || "";
   const TextContainer = isJob ? "details" : "div";
+  // The nearest upcoming deadline, follow-up, interview or assessment, as on the jobs list.
+  const upcoming = entry ? keyDate(entry, data.reminderPreferences) : null;
+  const next = upcoming && dayDiff(upcoming.date) >= 0 ? upcoming : null;
   async function changeStatus(status: string) {
     if (!entry || status === entry.status) return;
     setBusy(true);
@@ -162,10 +176,10 @@ export default function EntryDetail() {
           if (!open) closeEntry();
         }}
       >
-        <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-[640px]">
+        <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-[600px]">
           {entry && (
             <>
-              <div className="sticky top-0 z-10 border-b bg-background/95 px-6 pt-6 pb-4 backdrop-blur">
+              <div className="sticky top-0 z-10 border-b bg-card/95 px-5 pt-4 pb-3 backdrop-blur">
                 <div className="flex items-start gap-3 pr-8">
                   {isJob ? (
                     <CompanyMark
@@ -174,57 +188,51 @@ export default function EntryDetail() {
                       size="lg"
                     />
                   ) : (
-                    <KindIcon kind={entry.kind} className="size-12 rounded-xl [&_svg]:size-5" />
+                    <KindIcon kind={entry.kind} className="size-11 rounded-lg [&_svg]:size-5" />
                   )}
                   <div className="min-w-0 flex-1">
-                    <SheetTitle className="text-lg leading-snug font-semibold">
-                      {entry.title}
-                    </SheetTitle>
-                    <SheetDescription className="mt-0.5">
+                    <SheetDescription className="truncate text-xs">
                       {copy.noun} · {entry.organization || copy.orgEmpty}
                       {entry.location ? " · " + entry.location : ""}
                     </SheetDescription>
+                    <SheetTitle className="mt-0.5 text-lg leading-snug font-semibold tracking-tight">
+                      {entry.title}
+                    </SheetTitle>
                   </div>
                 </div>
-                <div className="mt-4 flex flex-wrap items-center gap-2">
+                <div className="mt-3 flex items-center gap-1.5">
                   <Select
                     value={entry.status}
                     onValueChange={(v) => void changeStatus(v)}
                     disabled={busy}
                   >
-                    <SelectTrigger size="sm" aria-label="更改状态" className="h-8 w-auto gap-2">
+                    <SelectTrigger size="sm" aria-label="更改状态" className="w-auto gap-1.5">
                       <SelectValue>{<StatusBadge status={entry.status} />}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {statusesFor(entry.kind).map((s) => (
                         <SelectItem key={s} value={s}>
-                          <Pill tone={toneOf(s)} dot>
-                            {s}
-                          </Pill>
+                          <StatusBadge status={s} />
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {entry.priority && (
-                    <Pill tone={entry.priority.includes("高") ? "red" : "gray"}>
-                      优先级 {entry.priority}
-                    </Pill>
-                  )}
                   {isJob && score(entry, weights) !== null && (
-                    <Pill tone="blue">
-                      综合 <ScoreValue entry={entry} weights={weights} />
-                    </Pill>
+                    <span className="inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs text-muted-foreground">
+                      综合
+                      <ScoreValue entry={entry} weights={weights} className="text-sm" />
+                    </span>
                   )}
-                  <div className="ml-auto flex gap-2">
+                  <div className="ml-auto flex items-center gap-1">
                     {entry.url && (
-                      <Button variant="outline" size="sm" asChild>
+                      <Button variant="ghost" size="sm" asChild>
                         <a href={entry.url} target="_blank" rel="noreferrer">
                           <ExternalLink />
                           {entry.kind === "project" ? "打开项目" : "原始页面"}
                         </a>
                       </Button>
                     )}
-                    <Button size="sm" onClick={() => editEntry(entry)}>
+                    <Button size="sm" variant="outline" onClick={() => editEntry(entry)}>
                       <Pencil />
                       编辑
                     </Button>
@@ -257,8 +265,8 @@ export default function EntryDetail() {
                 </div>
               </div>
               <Tabs key={entry.id} defaultValue="overview" className="gap-0">
-                <div className="border-b px-6">
-                  <TabsList variant="line" className="h-10">
+                <div className="border-b px-5">
+                  <TabsList variant="line" className="h-9">
                     <TabsTrigger value="overview">概览</TabsTrigger>
                     <TabsTrigger value="text">{isJob ? "摘要" : copy.text}</TabsTrigger>
                     {isJob ? (
@@ -279,46 +287,119 @@ export default function EntryDetail() {
                     </TabsTrigger>
                   </TabsList>
                 </div>
-                <div className="px-6 py-6">
-                  <TabsContent value="overview" className="flex flex-col gap-7">
-                    {(entry.nextAction || followUp) && (
-                      <div className="rounded-xl border border-primary/20 bg-accent/60 px-4 py-3">
-                        <p className="text-xs font-medium text-accent-foreground/80">下一步</p>
-                        <p className="mt-0.5 text-sm font-medium">{entry.nextAction || "跟进"}</p>
-                        {followUp && (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            计划 {formatDay(followUp)} · {relativeDay(followUp)}
-                          </p>
+                <div className="px-5 py-5">
+                  <TabsContent value="overview" className="flex flex-col gap-6">
+                    {(entry.nextAction || next) && (
+                      <div className="flex items-baseline gap-3 rounded-lg border bg-muted/40 px-3.5 py-2.5">
+                        <span className="shrink-0 text-xs text-muted-foreground">下一步</span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                          {entry.nextAction || next?.kind}
+                        </span>
+                        {next && (
+                          <span className={cn("tabular shrink-0 text-xs", dueTone(next.date))}>
+                            {next.kind} {formatDay(next.date, false)} · {relativeDay(next.date)}
+                          </span>
                         )}
                       </div>
                     )}
-                    <div className="grid grid-cols-3 gap-2">
-                      <DateCell
-                        label={entry.kind === "project" ? "目标日期" : "截止日期"}
-                        value={entry.deadline}
-                      />
-                      <DateCell
-                        label={
-                          copy.followUp +
-                          "日期" +
-                          (effective
-                            ? effective.source === "manual"
-                              ? "（手动）"
-                              : "（自动）"
-                            : "")
-                        }
-                        value={followUp}
-                      />
-                      <DateCell label={copy.applied + "日期"} value={entry.applied} />
-                    </div>
-                    {isJob && !effective && (
-                      <p className="text-xs text-muted-foreground">
-                        暂无可计算的跟进日期：请核对阶段日期、反馈状态及提醒设置，或设置手动跟进。自动跟进不会从缺失日期推算。
-                      </p>
-                    )}
+                    <Properties
+                      items={[
+                        {
+                          label: "优先级",
+                          value: entry.priority && (
+                            <span className="inline-flex items-center gap-1.5">
+                              <PriorityIcon priority={entry.priority} />
+                              {entry.priority}
+                            </span>
+                          ),
+                          hidden: !isJob && entry.kind !== "project",
+                        },
+                        {
+                          label: entry.kind === "project" ? "目标日期" : "截止日期",
+                          value: entry.deadline && <DateValue value={entry.deadline} />,
+                        },
+                        {
+                          label: copy.followUp + "日期",
+                          value: followUp ? (
+                            <DateValue
+                              value={followUp}
+                              note={
+                                effective
+                                  ? effective.source === "manual"
+                                    ? "手动"
+                                    : "自动"
+                                  : undefined
+                              }
+                            />
+                          ) : isJob ? (
+                            <span className="text-faint">暂无可计算的跟进日期</span>
+                          ) : null,
+                        },
+                        {
+                          label: copy.applied + "日期",
+                          value: entry.applied && <DateValue value={entry.applied} />,
+                        },
+                        ...(isJob
+                          ? [
+                              {
+                                label: "投递渠道",
+                                value: entry.applicationChannel,
+                                hidden: !entry.applicationChannel,
+                              },
+                              {
+                                label: "投递链接",
+                                value: <ExternalValue href={entry.applicationUrl} />,
+                                hidden: !entry.applicationUrl,
+                              },
+                              {
+                                label: "工作模式",
+                                value: entry.workMode,
+                                hidden: entry.workMode === "待核实",
+                              },
+                              {
+                                label: "岗位类型",
+                                value: entry.employmentType,
+                                hidden: entry.employmentType === "待核实",
+                              },
+                              {
+                                label: "工作时间",
+                                value: entry.schedule,
+                                hidden: entry.schedule === "待核实",
+                              },
+                              { label: "薪资", value: entry.salary, hidden: !entry.salary },
+                              {
+                                label: "公司所在地",
+                                value: entry.companyCountry,
+                                hidden: !entry.companyCountry,
+                              },
+                            ]
+                          : entry.kind === "project"
+                            ? [
+                                {
+                                  label: "项目链接",
+                                  value: <ExternalValue href={entry.url} />,
+                                  hidden: !entry.url,
+                                },
+                                {
+                                  label: "团队 / 合作方",
+                                  value: entry.organization,
+                                  hidden: !entry.organization,
+                                },
+                              ]
+                            : [
+                                { label: "地点", value: entry.location, hidden: !entry.location },
+                                { label: "奖励", value: entry.salary, hidden: !entry.salary },
+                                {
+                                  label: "报名链接",
+                                  value: <ExternalValue href={entry.applicationUrl} />,
+                                  hidden: !entry.applicationUrl,
+                                },
+                              ]),
+                      ]}
+                    />
                     {entry.appointments.length > 0 && (
                       <Section title="面试与笔试">
-                        <ul className="flex flex-col gap-2">
+                        <ul className="flex flex-col overflow-hidden rounded-lg border">
                           {entry.appointments
                             .toSorted((a, b) => a.startsAt.localeCompare(b.startsAt))
                             .map((item) => {
@@ -330,30 +411,58 @@ export default function EntryDetail() {
                                   due,
                                   data.reminderPreferences.assessment.planDays,
                                 );
+                              const time =
+                                item.type === "assessment"
+                                  ? null
+                                  : `${appointmentTime(item.startsAt)}${item.endsAt ? "–" + appointmentTime(item.endsAt) : ""}`;
                               return (
                                 <li
                                   key={item.id}
-                                  className="flex gap-3 rounded-lg border bg-card px-3 py-2.5"
+                                  className={cn(
+                                    "flex gap-3 border-b px-3.5 py-3 last:border-b-0",
+                                    item.stageState === "superseded" && "opacity-60",
+                                  )}
                                 >
                                   <CalendarClock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                                   <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium">{item.title}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {item.type === "assessment"
-                                        ? `通知 ${formatDay(item.receivedDate) || "未设置"} · ${item.deadlineDate ? "公司截止" : "应用计划期限"} ${formatDay(stageDueDate(item, data.reminderPreferences.assessment.planDays)) || "未设置（缺少通知日期）"}${item.completedAt ? ` · 完成 ${formatDay(appointmentDate(item.completedAt))}` : ""}`
-                                        : `${formatDay(appointmentDate(item.startsAt))} ${appointmentTime(item.startsAt)}${item.endsAt ? "–" + appointmentTime(item.endsAt) : ""}`}
-                                      {" · 香港时间（UTC+8）"}
+                                    <div className="flex items-center gap-2">
+                                      <p className="min-w-0 flex-1 truncate text-sm font-medium">
+                                        {item.title}
+                                      </p>
+                                      <Pill
+                                        tone={
+                                          item.status === "completed"
+                                            ? "green"
+                                            : item.status === "cancelled"
+                                              ? "gray"
+                                              : "blue"
+                                        }
+                                      >
+                                        {appointmentStatus[item.status]}
+                                      </Pill>
+                                    </div>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                      {item.type === "assessment" ? (
+                                        `收到 ${formatDay(item.receivedDate) || "未设置"} · ${item.deadlineDate ? "截止" : "计划期限"} ${formatDay(stageDueDate(item, data.reminderPreferences.assessment.planDays)) || "未设置"}${item.completedAt ? ` · 完成 ${formatDay(appointmentDate(item.completedAt))}` : ""}`
+                                      ) : (
+                                        <>
+                                          {formatDay(appointmentDate(item.startsAt))}{" "}
+                                          {time && <HkTime time={time} />}
+                                        </>
+                                      )}
                                       {item.location ? " · " + item.location : ""}
                                     </p>
-                                    <div className="mt-1 h-1.5 overflow-hidden rounded bg-muted">
-                                      <div
-                                        className="h-full bg-primary"
-                                        style={{ width: `${progress.percent}%` }}
-                                      />
+                                    <div className="mt-2 flex items-center gap-2">
+                                      <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                                        <div
+                                          className="h-full rounded-full bg-primary"
+                                          style={{ width: `${progress.percent}%` }}
+                                        />
+                                      </div>
+                                      <span className="shrink-0 text-xs text-muted-foreground">
+                                        {progress.label}
+                                      </span>
                                     </div>
-                                    <p className="mt-1 text-xs text-muted-foreground">
-                                      {progress.label}
-                                    </p>
                                     {isJob && item.type === "assessment" ? (
                                       <AssessmentAccess
                                         key={`${entry.id}:${item.id}`}
@@ -364,7 +473,7 @@ export default function EntryDetail() {
                                     ) : (
                                       item.url && (
                                         <a
-                                          className="text-xs text-primary hover:underline"
+                                          className="mt-1 inline-block text-xs text-primary hover:underline"
                                           href={item.url}
                                           target="_blank"
                                           rel="noreferrer"
@@ -374,97 +483,26 @@ export default function EntryDetail() {
                                       )
                                     )}
                                   </div>
-                                  <Pill
-                                    tone={
-                                      item.status === "completed"
-                                        ? "green"
-                                        : item.status === "cancelled"
-                                          ? "gray"
-                                          : "blue"
-                                    }
-                                  >
-                                    {appointmentStatus[item.status]}
-                                  </Pill>
                                 </li>
                               );
                             })}
                         </ul>
                       </Section>
                     )}
-                    <Section title="详情">
-                      <Facts
-                        items={
-                          isJob
-                            ? [
-                                { label: "投递渠道", value: entry.applicationChannel },
-                                {
-                                  label: "投递链接",
-                                  value: entry.applicationUrl && (
-                                    <a
-                                      className="break-all select-text text-primary hover:underline"
-                                      href={entry.applicationUrl}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                    >
-                                      {entry.applicationUrl}
-                                      <ExternalLink className="ml-1 inline size-3" />
-                                    </a>
-                                  ),
-                                },
-                                { label: "工作地点", value: entry.location },
-                                { label: "工作模式", value: entry.workMode },
-                                { label: "岗位类型", value: entry.employmentType },
-                                { label: "工作时间", value: entry.schedule },
-                                { label: "薪资", value: entry.salary },
-                                { label: "公司所属国家／地区", value: entry.companyCountry },
-                              ]
-                            : entry.kind === "project"
-                              ? [
-                                  {
-                                    label: "项目链接",
-                                    value: entry.url && (
-                                      <a
-                                        className="inline-flex items-center gap-1 break-all text-primary hover:underline"
-                                        href={entry.url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                      >
-                                        {entry.url.replace(/^https?:\/\//, "")}
-                                        <ExternalLink className="size-3 shrink-0" />
-                                      </a>
-                                    ),
-                                    wide: true,
-                                  },
-                                  { label: "团队 / 合作方", value: entry.organization },
-                                  { label: "优先级", value: entry.priority },
-                                ]
-                              : [
-                                  { label: "地点", value: entry.location },
-                                  { label: "奖励", value: entry.salary },
-                                  {
-                                    label: "报名链接",
-                                    value: entry.applicationUrl && (
-                                      <a
-                                        className="text-primary hover:underline"
-                                        href={entry.applicationUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                      >
-                                        打开
-                                      </a>
-                                    ),
-                                  },
-                                ]
-                        }
-                      />
-                    </Section>
                     {isJob && (
                       <Section title="公司介绍">
-                        <div className="rounded-lg border bg-card px-3 py-2.5">
-                          <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                            {entry.companyDescription || "暂无公司介绍，可在编辑中补充。"}
+                        {entry.companyDescription ? (
+                          <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                            {entry.companyDescription}
                           </p>
-                        </div>
+                        ) : (
+                          <button
+                            className="self-start text-sm text-faint hover:text-primary"
+                            onClick={() => editEntry(entry)}
+                          >
+                            添加公司介绍…
+                          </button>
+                        )}
                       </Section>
                     )}
                     {!isJob && entry.notes && (
@@ -473,8 +511,8 @@ export default function EntryDetail() {
                       </Section>
                     )}
                     {!isJob && Object.keys(entry.extra).length > 0 && (
-                      <details className="group rounded-lg border bg-card">
-                        <summary className="cursor-pointer px-3 py-2.5 text-xs text-muted-foreground">
+                      <details className="group rounded-lg border">
+                        <summary className="cursor-pointer px-3 py-2 text-xs text-muted-foreground">
                           导入时的原始字段
                         </summary>
                         <dl className="flex flex-col gap-3 border-t px-3 py-3">
@@ -500,13 +538,13 @@ export default function EntryDetail() {
                         />
                       </Section>
                     )}
-                    <TextContainer className={isJob ? "rounded-lg border bg-card" : "contents"}>
+                    <TextContainer className={isJob ? "rounded-lg border" : "contents"}>
                       {isJob && (
-                        <summary className="cursor-pointer px-4 py-3 text-sm">
+                        <summary className="cursor-pointer px-3.5 py-2.5 text-sm font-medium">
                           JD 原文{!selectedLoading && !entry.jd ? "（暂无）" : ""}
                         </summary>
                       )}
-                      <div className={isJob ? "flex flex-col gap-4 border-t p-4" : "contents"}>
+                      <div className={isJob ? "flex flex-col gap-3 border-t p-3.5" : "contents"}>
                         <div className="flex flex-wrap items-center gap-2">
                           <Pill
                             tone={
@@ -544,7 +582,7 @@ export default function EntryDetail() {
                             正在读取全文…
                           </p>
                         ) : entry.jd ? (
-                          <article className="rounded-xl border bg-card px-5 py-4 text-sm leading-7 whitespace-pre-wrap break-words">
+                          <article className="rounded-md bg-muted/40 px-4 py-3 text-sm leading-7 whitespace-pre-wrap break-words">
                             {entry.jd}
                           </article>
                         ) : isJob ? (
@@ -576,7 +614,7 @@ export default function EntryDetail() {
                       </div>
                     </TextContainer>
                     {!isJob && entry.summary && (
-                      <details open={!entry.jd} className="rounded-lg border bg-card">
+                      <details open={!entry.jd} className="rounded-lg border">
                         <summary className="cursor-pointer px-3 py-2.5 text-xs text-muted-foreground">
                           摘要 / 摘录
                         </summary>
@@ -603,13 +641,15 @@ export default function EntryDetail() {
                             key={label}
                             className={
                               i === 0
-                                ? "rounded-lg bg-primary px-3 py-2.5 text-primary-foreground"
-                                : "rounded-lg border bg-card px-3 py-2.5"
+                                ? "rounded-lg border border-primary/25 bg-accent px-3 py-2.5"
+                                : "rounded-lg border px-3 py-2.5"
                             }
                           >
                             <p
                               className={
-                                i === 0 ? "text-xs opacity-80" : "text-xs text-muted-foreground"
+                                i === 0
+                                  ? "text-xs text-accent-foreground"
+                                  : "text-xs text-muted-foreground"
                               }
                             >
                               {label}
@@ -656,9 +696,9 @@ export default function EntryDetail() {
                             .map((log) => (
                               <li key={log.id} className="relative">
                                 {log.milestone ? (
-                                  <Flag className="absolute top-0.5 -left-[29px] size-4 rounded-full bg-background fill-amber-500 p-0.5 text-amber-500" />
+                                  <Flag className="absolute top-0.5 -left-[29px] size-4 rounded-full bg-card fill-warning p-0.5 text-warning" />
                                 ) : (
-                                  <span className="absolute top-1.5 -left-[25px] size-2 rounded-full bg-primary ring-4 ring-background" />
+                                  <span className="absolute top-1.5 -left-[25px] size-2 rounded-full bg-primary ring-4 ring-card" />
                                 )}
                                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                   <span className="tabular font-medium text-foreground">
@@ -725,7 +765,7 @@ export default function EntryDetail() {
                         }}
                       />
                       {files.length ? (
-                        <ul className="overflow-hidden rounded-lg border bg-card">
+                        <ul className="overflow-hidden rounded-lg border">
                           {files.map((f) => (
                             <li key={f.id} className="border-b last:border-b-0">
                               <a

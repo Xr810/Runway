@@ -22,8 +22,8 @@ export const lastActivity = (e: Entry) => e.progress.reduce((max, p) => p.date >
 
 export function KindIcon({ kind, className }: { kind: Entry["kind"]; className?: string }) {
   return kind === "project"
-    ? <span className={cn("inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700 ring-1 ring-blue-600/15 ring-inset dark:bg-blue-400/10 dark:text-blue-300", className)}><FolderKanban className="size-4" /></span>
-    : <span className={cn("inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700 ring-1 ring-amber-600/15 ring-inset dark:bg-amber-400/10 dark:text-amber-300", className)}><Trophy className="size-4" /></span>;
+    ? <span className={cn("inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-info/10 text-info ring-1 ring-info/20 ring-inset", className)}><FolderKanban className="size-4" /></span>
+    : <span className={cn("inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-warning/10 text-warning ring-1 ring-warning/20 ring-inset", className)}><Trophy className="size-4" /></span>;
 }
 
 export default function ProjectsView() {
@@ -86,7 +86,7 @@ function TrackCard({ entry, year, onLog }: { entry: Entry; year: number; onLog: 
   const visible = entry.progress.filter(p => !day || p.date === day).toSorted((a, b) => b.date.localeCompare(a.date)).slice(0, day ? 30 : 4);
   const weeks = Array.from({ length: Math.ceil(days.length / 7) }, (_, w) => days.slice(w * 7, w * 7 + 7));
   const last = lastActivity(entry), project = entry.kind === "project";
-  return <article className="flex flex-col rounded-xl border bg-card">
+  return <article className="flex flex-col rounded-lg border bg-card">
     <div className="flex items-start gap-3 p-4 pb-3">
       <KindIcon kind={entry.kind} />
       <button className="min-w-0 flex-1 text-left" onClick={() => openEntry(entry.id)}><h2 className="truncate text-[15px] font-semibold hover:text-primary">{entry.title}</h2>
@@ -94,15 +94,15 @@ function TrackCard({ entry, year, onLog }: { entry: Entry; year: number; onLog: 
       <StatusBadge status={entry.status} />
     </div>
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 text-xs text-muted-foreground">
-      <span className="inline-flex items-center gap-1.5"><CalendarDays className="size-3.5" />{entry.deadline ? <>{project ? "目标" : "截止"} {formatDay(entry.deadline, false)} <b className={cn("font-medium", dayDiff(entry.deadline) < 0 ? "text-muted-foreground" : dayDiff(entry.deadline) <= 7 ? "text-red-600 dark:text-red-400" : "text-foreground")}>{dayDiff(entry.deadline) < 0 ? "已过" : dayDiff(entry.deadline) === 0 ? "今天" : `还有 ${dayDiff(entry.deadline)} 天`}</b></> : project ? "没有设定目标日期" : "未设置截止"}</span>
+      <span className="inline-flex items-center gap-1.5"><CalendarDays className="size-3.5" />{entry.deadline ? <>{project ? "目标" : "截止"} {formatDay(entry.deadline, false)} <b className={cn("font-medium", dayDiff(entry.deadline) < 0 ? "text-muted-foreground" : dayDiff(entry.deadline) <= 7 ? "text-danger" : "text-foreground")}>{dayDiff(entry.deadline) < 0 ? "已过" : dayDiff(entry.deadline) === 0 ? "今天" : `还有 ${dayDiff(entry.deadline)} 天`}</b></> : project ? "没有设定目标日期" : "未设置截止"}</span>
       <span>{last ? <>上次推进 <b className="font-medium text-foreground">{relativeDay(last)}</b></> : "还没有进度"}</span>
       <span><b className="tabular font-medium text-foreground">{counts.size}</b> 天活跃</span>
-      {milestones.length > 0 && <span className="inline-flex items-center gap-1"><Flag className="size-3 fill-amber-500 text-amber-500" /><b className="tabular font-medium text-foreground">{milestones.length}</b> 个里程碑</span>}
+      {milestones.length > 0 && <span className="inline-flex items-center gap-1"><Flag className="size-3 fill-warning text-warning" /><b className="tabular font-medium text-foreground">{milestones.length}</b> 个里程碑</span>}
       {minutes > 0 && <span><b className="tabular font-medium text-foreground">{Math.round(minutes / 6) / 10}</b> 小时</span>}
     </div>
     {milestones.length > 0 && <div className="mx-4 mt-3 flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-none">
-      {milestones.slice(0, 4).map(m => <button key={m.id} onClick={() => setDay(m.date)} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs text-amber-900 ring-1 ring-amber-600/20 ring-inset hover:ring-amber-600/40 dark:bg-amber-400/10 dark:text-amber-200 dark:ring-amber-400/20">
-        <Flag className="size-3 fill-amber-500 text-amber-500" /><span className="max-w-[16rem] truncate">{m.text.split("\n")[0]}</span><span className="tabular text-amber-700/70 dark:text-amber-300/70">{m.date.slice(5)}</span></button>)}
+      {milestones.slice(0, 4).map(m => <button key={m.id} onClick={() => setDay(m.date)} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-warning/10 px-2.5 py-1 text-xs text-warning ring-1 ring-warning/20 ring-inset hover:ring-warning/20">
+        <Flag className="size-3 fill-warning text-warning" /><span className="max-w-[16rem] truncate">{m.text.split("\n")[0]}</span><span className="tabular text-warning/70">{m.date.slice(5)}</span></button>)}
       {milestones.length > 4 && <span className="shrink-0 text-xs text-muted-foreground">另有 {milestones.length - 4} 个</span>}
     </div>}
     <div className="mt-3 grid border-t xl:grid-cols-[auto_minmax(0,1fr)]">
@@ -111,11 +111,11 @@ function TrackCard({ entry, year, onLog }: { entry: Entry; year: number; onLog: 
           <div className="flex w-max gap-[3px]" role="group" aria-label={`${entry.title} ${year} 年进度热力图`}>
             {weeks.map((week, w) => <div key={w} className="flex flex-col gap-[3px]">{week.map(d => { const count = counts.get(d.date) || 0, milestone = milestoneDays.has(d.date); return <button key={d.date} disabled={!d.inYear || d.future}
               title={`${d.date} · ${count} 条进度${milestone ? " · 里程碑" : ""}`} aria-label={`${d.date} ${count} 条进度${milestone ? "，含里程碑" : ""}`} onClick={() => setDay(c => c === d.date ? "" : d.date)}
-              className={cn("size-[10px] rounded-[2px] transition-transform hover:scale-125 disabled:pointer-events-none", !d.inYear ? "invisible" : d.future ? "bg-muted/40" : milestone ? "bg-amber-500" : levels[Math.min(4, count)], day === d.date && "ring-2 ring-foreground ring-offset-1 ring-offset-card")} />; })}</div>)}
+              className={cn("size-[10px] rounded-[2px] transition-transform hover:scale-125 disabled:pointer-events-none", !d.inYear ? "invisible" : d.future ? "bg-muted/40" : milestone ? "bg-warning" : levels[Math.min(4, count)], day === d.date && "ring-2 ring-foreground ring-offset-1 ring-offset-card")} />; })}</div>)}
           </div>
         </div>
         <div className="flex items-center justify-between gap-4 py-2.5 text-[11px] text-muted-foreground"><span>{day ? formatDay(day) : `${year} 年 · 点击格子查看当天`}</span>
-          <span className="flex items-center gap-1">少{levels.map(l => <i key={l} className={cn("size-2 rounded-[2px]", l)} />)}多<i className="ml-2 size-2 rounded-[2px] bg-amber-500" />里程碑</span></div>
+          <span className="flex items-center gap-1">少{levels.map(l => <i key={l} className={cn("size-2 rounded-[2px]", l)} />)}多<i className="ml-2 size-2 rounded-[2px] bg-warning" />里程碑</span></div>
       </div>
       <div className="min-w-0 px-4 py-3">
         <div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-medium text-muted-foreground">{day ? "当天记录" : "最近记录"}</h3>{day && <button className="text-xs text-primary hover:underline" onClick={() => setDay("")}>返回最近</button>}</div>

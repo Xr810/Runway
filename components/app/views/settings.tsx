@@ -27,11 +27,11 @@ export default function SettingsView() {
   const go = (key: Section) => { if (key !== current && confirmLeave()) router.replace("/settings?section=" + key, { scroll: false }); };
   return <>
     <PageHeader title="设置" />
-    <div className="grid gap-6 md:grid-cols-[208px_minmax(0,1fr)] md:gap-10">
-      <nav aria-label="设置分类" className="-mx-1 flex gap-1 overflow-x-auto px-1 scrollbar-none md:mx-0 md:flex-col md:px-0">
-        {sections.map(s => <button key={s.key} onClick={() => go(s.key)} aria-current={current === s.key ? "page" : undefined}
-          className={cn("flex shrink-0 items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-card hover:text-foreground md:py-2.5", current === s.key && "bg-card text-foreground shadow-sm ring-1 ring-border")}>
-          <s.icon className="size-4 shrink-0" /><span className="flex flex-col"><span className="font-medium">{s.label}</span><span className="hidden text-xs text-muted-foreground md:block">{s.hint}</span></span>
+    <div className="grid gap-6 md:grid-cols-[200px_minmax(0,1fr)] md:gap-10">
+      <nav aria-label="设置分类" className="-mx-1 flex gap-0.5 overflow-x-auto px-1 scrollbar-none md:mx-0 md:flex-col md:px-0">
+        {sections.map(s => <button key={s.key} onClick={() => go(s.key)} aria-current={current === s.key ? "page" : undefined} title={s.hint}
+          className={cn("flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground", current === s.key && "bg-muted font-medium text-foreground")}>
+          <s.icon className="size-4 shrink-0" />{s.label}
         </button>)}
       </nav>
       <div className="max-w-2xl min-w-0">
@@ -41,8 +41,8 @@ export default function SettingsView() {
         {current === "integrations" && <AutomationSettings />}
         {current === "data" && <DataSettings />}
         {current === "version" && <section aria-labelledby="version-title" className="flex flex-col gap-5">
-          <div><h2 id="version-title" className="text-lg font-semibold">版本与更新日志</h2><p className="mt-1 text-sm text-muted-foreground">当前版本 {version}</p></div>
-          <article className="rounded-xl border bg-card p-5">
+          <div><h2 id="version-title" className="text-base font-semibold">版本与更新日志</h2><p className="mt-1 text-sm text-muted-foreground">当前版本 {version}</p></div>
+          <article className="rounded-lg border p-5">
             <h3 className="font-semibold">0.1.0</h3>
             <p className="mt-1 text-sm">首个正式上线版本</p>
             <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-muted-foreground">

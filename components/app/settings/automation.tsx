@@ -25,7 +25,7 @@ export default function AutomationSettings() {
   }
   return <div className="flex flex-col gap-5">
     <div><h2 className="text-lg font-semibold">自动化</h2><p className="mt-1 text-sm text-muted-foreground">Runway 每天扫描你关注的公司招聘页和招聘网站，用 AI 按你的求职方向挑出合适的岗位自动加入，并补全公司官网、图标和类型。</p></div>
-    {scan.overview && !scan.overview.configured && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-400/10 dark:text-amber-300">自动扫描需要 AI 模型。请先在「AI 模型」里完成配置。</p>}
+    {scan.overview && !scan.overview.configured && <p className="rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">自动扫描需要 AI 模型。请先在「AI 模型」里完成配置。</p>}
     <Panel title="每日扫描" description={`当前开启的关注：${enabledWatches} 个。关注列表在「公司」页维护。`}>
       {!settings ? <LoaderCircle className="size-4 animate-spin text-muted-foreground" /> : <div className="flex flex-col gap-4">
         <label className="flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm">每天自动扫描<Switch checked={settings.enabled} onCheckedChange={v => setDraft({ ...settings, enabled: v })} /></label>

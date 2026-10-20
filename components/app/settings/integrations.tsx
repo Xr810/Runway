@@ -19,8 +19,8 @@ export default function IntegrationSettings() {
   }
   return <div className="flex flex-col gap-5">
     <div><h3 className="text-base font-semibold">Muse 接入</h3><p className="mt-1 text-sm text-muted-foreground">Muse 在自己的服务器上读取邮件、抓取招聘网站，再通过这里的接口同步。接口写入会直接保存，并生成一条通知。</p></div>
-    {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-400/10 dark:text-red-300">{error}</p>}
-    {message && <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300">{message}</p>}
+    {error && <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
+    {message && <p role="status" className="rounded-lg bg-success/10 px-3 py-2 text-sm text-success">{message}</p>}
     <Panel title="接入地址">
       <div className="flex flex-col gap-3 text-sm">
         <Input readOnly value={base} aria-label="接口地址" className="font-mono text-xs" />
@@ -34,7 +34,7 @@ export default function IntegrationSettings() {
       <div className="flex flex-col gap-4">
         <div className="flex items-end gap-2"><div className="grid flex-1 gap-1.5"><Label htmlFor="int-name">集成名称</Label><Input id="int-name" value={name} maxLength={80} onChange={e => setName(e.target.value)} /></div>
           <Button disabled={busy || !name.trim()} onClick={() => void run({ action: "create", name })}>{busy ? <LoaderCircle className="animate-spin" /> : <Plug />}创建密钥</Button></div>
-        {token && <div className="flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-400/30 dark:bg-amber-400/10"><p className="text-xs font-medium text-amber-900 dark:text-amber-200">新密钥，只显示这一次</p>
+        {token && <div className="flex flex-col gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3"><p className="text-xs font-medium text-warning">新密钥，只显示这一次</p>
           <div className="flex gap-2"><Input readOnly value={token} className="font-mono text-xs" aria-label="新密钥" autoComplete="off" /><Button variant="outline" onClick={async () => { try { await navigator.clipboard.writeText(token); setMessage("已复制"); } catch { setError("复制失败，请手动选中复制"); } }}><Copy />复制</Button><Button variant="ghost" onClick={() => setToken("")}>隐藏</Button></div></div>}
         {clients.length > 0 && <ul className="overflow-hidden rounded-lg border">{clients.map(c => <li key={c.id} className="flex items-center gap-3 border-b px-3 py-2.5 last:border-b-0">
           <KeyRound className="size-4 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="text-sm font-medium">{c.name}</p><p className="text-xs text-muted-foreground"><code className="font-mono">••••{c.token_hint}</code> · {c.revoked_at ? "已撤销" : c.last_used_at ? "最近调用 " + stamp(c.last_used_at) : "尚未调用"}</p></div>

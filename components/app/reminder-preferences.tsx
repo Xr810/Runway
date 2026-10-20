@@ -96,7 +96,7 @@ export function ReminderPreferencesEditor() {
           <span className="text-sm text-muted-foreground">天无反馈时提醒</span>
           {kind === "assessment" && (
             <select
-              className="rounded-md border bg-background p-2 text-sm"
+              className="rounded-md border bg-card p-2 text-sm"
               value={value.assessment.reminderBase}
               onChange={(event) =>
                 update("assessment", {

@@ -127,7 +127,7 @@ export default function Assistant({ userId }: { userId: string }) {
   return (
     <aside
       aria-label="AI 助手"
-      className="fixed inset-y-0 right-0 z-40 flex w-full max-w-[460px] flex-col border-l bg-card shadow-xl"
+      className="fixed inset-y-0 right-0 z-40 flex w-full max-w-[420px] flex-col border-l bg-card shadow-pop xl:shadow-none"
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
@@ -192,7 +192,7 @@ export default function Assistant({ userId }: { userId: string }) {
             <p
               className={cn(
                 "max-w-full whitespace-pre-wrap break-words text-sm leading-relaxed",
-                m.role === "user" && "rounded-xl bg-primary px-3 py-2 text-primary-foreground",
+                m.role === "user" && "rounded-lg bg-primary px-3 py-2 text-primary-foreground",
               )}
             >
               {m.text}
@@ -209,7 +209,7 @@ export default function Assistant({ userId }: { userId: string }) {
               </a>
             ))}
             {m.run?.runError && (
-              <p role="alert" className="text-xs text-red-600">
+              <p role="alert" className="text-xs text-danger">
                 {m.run.runError}
               </p>
             )}
@@ -221,7 +221,7 @@ export default function Assistant({ userId }: { userId: string }) {
             {m.run?.actions?.map((a) => {
               const outcome = m.run!.outcomes[a.id];
               return (
-                <article key={a.id} className="w-full rounded-xl border bg-background p-3">
+                <article key={a.id} className="w-full rounded-lg border bg-muted/30 p-3">
                   <Pill
                     tone={
                       outcome?.status === "done"
@@ -264,7 +264,7 @@ export default function Assistant({ userId }: { userId: string }) {
                     </p>
                   )}
                   {!!a.warnings?.length && (
-                    <div className="mt-2 text-xs text-amber-700">
+                    <div className="mt-2 text-xs text-warning">
                       {a.warnings.join("；")}
                       <label className="mt-1 flex gap-1">
                         <input
@@ -361,14 +361,14 @@ export default function Assistant({ userId }: { userId: string }) {
                 setText(suggestion);
                 inputRef.current?.focus();
               }}
-              className="w-full rounded-xl border bg-background px-4 py-4 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50"
+              className="w-full rounded-lg border bg-card px-4 py-4 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50"
             >
               {suggestion}
             </button>
           ))}
         </div>
         {error && (
-          <p role="alert" className="mb-2 text-xs text-red-600">
+          <p role="alert" className="mb-2 text-xs text-danger">
             {error}
           </p>
         )}
@@ -394,7 +394,7 @@ export default function Assistant({ userId }: { userId: string }) {
             e.preventDefault();
             void send();
           }}
-          className="rounded-xl border bg-background p-2"
+          className="rounded-lg border bg-muted/30 p-2"
         >
           <textarea
             ref={inputRef}
