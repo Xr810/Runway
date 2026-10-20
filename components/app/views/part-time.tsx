@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { EmptyState, PageHeader, Pill, Segmented } from "../ui";
 import { useAssistantPanel } from "../assistant-panel-context";
 
-const selectClass = "h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/50";
+const selectClass = "h-8 w-full rounded-md border border-input bg-card px-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/25";
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="grid gap-1.5 text-sm"><span className="text-xs font-medium text-muted-foreground">{label}</span>{children}</label>;
 }
@@ -85,10 +85,10 @@ export default function PartTimeView() {
 
   return <>
     <PageHeader title="兼职与收入" description="一次性的小任务、长期合作，以及持续产生的平台收入。" actions={<div className="flex flex-wrap gap-2"><Button variant="outline" disabled={loading || !!error} onClick={exportData}><ArrowDownToLine />导出</Button><Button variant="outline" onClick={() => askAssistant("帮我添加一条兼职：")}><Sparkles />AI 添加</Button><Button onClick={() => setEditing(newGig(kind === "all" ? "task" : kind))}><Plus />添加兼职</Button></div>} />
-    {error && <div role="alert" className="mb-4 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}<Button variant="outline" size="sm" onClick={() => void reload()}>重新加载</Button></div>}
+    {error && <div role="alert" className="mb-4 flex items-center justify-between rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">{error}<Button variant="outline" size="sm" onClick={() => void reload()}>重新加载</Button></div>}
     <div className="mb-2 grid gap-3 sm:grid-cols-3">{([
       ["本月到账", "month"], ["累计到账", "received"], ["待到账", "pending"],
-    ] as const).map(([label, key]) => <section key={key} className="rounded-xl border bg-card p-4"><h2 className="text-xs text-muted-foreground">{label}</h2>
+    ] as const).map(([label, key]) => <section key={key} className="rounded-lg border bg-card p-4"><h2 className="text-xs text-muted-foreground">{label}</h2>
       <div className="mt-2 space-y-1">{loading ? <p className="text-lg text-muted-foreground">—</p> : totals.length ? totals.map(total => <p key={total.currency} className="tabular text-lg font-semibold">{formatMoney(total[key], total.currency)}</p>) : <p className="text-lg text-muted-foreground">暂无记录</p>}</div>
     </section>)}</div>
     <p className="mb-6 text-xs text-muted-foreground">不同币种分开统计，不自动换算。统计包含已归档兼职，作废的收入不计入。</p>
@@ -97,9 +97,9 @@ export default function PartTimeView() {
       <div className="relative min-w-[200px] flex-1 sm:max-w-xs"><Search className="pointer-events-none absolute top-2.5 left-2.5 size-4 text-muted-foreground" /><Input aria-label="搜索兼职" placeholder="搜索任务、平台、备注…" className="bg-card pl-8" value={query} onChange={e => setQuery(e.target.value)} /></div>
       <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={archived} onChange={e => setArchived(e.target.checked)} />查看已归档</label>
     </div>
-    {loading ? <div className="h-36 animate-pulse rounded-xl bg-muted" /> : visible.length ? <div className="grid gap-4">{visible.map(item => {
+    {loading ? <div className="h-36 animate-pulse rounded-lg bg-muted" /> : visible.length ? <div className="grid gap-4">{visible.map(item => {
       const itemTotals = incomeTotals([item]);
-      return <article key={item.id} className="min-w-0 rounded-xl border bg-card p-4 sm:p-5">
+      return <article key={item.id} className="min-w-0 rounded-lg border bg-card p-4 sm:p-5">
         <div className="flex items-start gap-3"><span className="rounded-lg bg-accent p-2 text-primary">{item.type === "task" ? <ClipboardList className="size-5" /> : <Wallet className="size-5" />}</span>
           <div className="min-w-0 flex-1"><h2 className="break-words text-base font-semibold">{item.title}</h2><p className="mt-1 text-xs text-muted-foreground">{gigTypes[item.type]}{item.organization && ` · ${item.organization}`}</p></div><Pill tone={item.status === "进行中" ? "blue" : item.status === "已完成" ? "green" : "gray"}>{item.status}</Pill></div>
         <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2"><div><p className="text-xs text-muted-foreground">报酬 / 结算约定</p><p className="mt-1 whitespace-pre-wrap break-words">{item.compensation || "尚未填写"}</p></div><div><p className="text-xs text-muted-foreground">下一步{item.dueDate ? ` · ${item.dueDate}` : ""}</p><p className="mt-1 whitespace-pre-wrap break-words">{item.nextAction || "尚未安排"}</p></div></div>

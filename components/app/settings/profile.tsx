@@ -62,7 +62,7 @@ export default function ProfileSettings() {
   }
   return <div className="flex flex-col gap-5">
     <div><h2 className="text-lg font-semibold">个人背景</h2><p className="mt-1 text-sm text-muted-foreground">岗位评估、自动扫描和 AI 助手都会参考这里。只填你愿意交给 AI 服务的内容。</p></div>
-    {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-400/10 dark:text-red-300">{error}</p>}
+    {error && <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
     {!profile ? <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />正在读取…</div> : <>
       <Panel title="简历" description="支持 PDF、Word（.docx）、Markdown、纯文本，最大 5 MB。服务器会提取文字，原文件可以随时下载或删除。">
         <input ref={fileRef} type="file" hidden accept=".pdf,.docx,.md,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown,text/plain" onChange={e => { const f = e.target.files?.[0]; if (f) void uploadCv(f); e.target.value = ""; }} />
@@ -92,7 +92,7 @@ export default function ProfileSettings() {
         <div className="flex flex-col gap-5">{fields.map(f => <div key={f.key} className="grid gap-1.5"><Label htmlFor={"pf-" + f.key}>{f.label}</Label>
           <Textarea id={"pf-" + f.key} rows={f.rows} maxLength={f.max} disabled={busy} placeholder={f.placeholder} value={profile[f.key]} onChange={e => change({ [f.key]: e.target.value })} /></div>)}</div>
       </Panel>
-      <div className="sticky bottom-4 flex items-center justify-between gap-3 rounded-xl border bg-card/95 px-4 py-3 shadow-sm backdrop-blur">
+      <div className="sticky bottom-4 flex items-center justify-between gap-3 rounded-lg border bg-card/95 px-4 py-3 shadow-sm backdrop-blur">
         <span className="text-sm text-muted-foreground">{dirty ? "有未保存的修改" : "已保存"}</span>
         <Button disabled={busy || !dirty} onClick={() => void save()}>{busy ? <LoaderCircle className="animate-spin" /> : <Save />}保存</Button>
       </div>

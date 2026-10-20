@@ -83,12 +83,12 @@ export function EvaluationTimeline({ target, onSaved, compact = false }: { targe
         </Button>
       </div>
     </div>
-    {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-400/10 dark:text-red-300">{error}</p>}
+    {error && <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
     {state?.manualLogo && <p className="text-xs text-muted-foreground">正在使用手动设置的图标。清空公司资料里的图标地址后才会恢复自动获取。</p>}
     {task?.error && !state?.locked && <p className="text-xs text-muted-foreground">最近一次任务：{task.error}</p>}
     {!feed ? <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />正在读取…</div>
       : !visibleHistory?.length ? <EmptyState icon={<History />} title={isJob ? "还没有评估结果" : "还没有图标记录"} description={isJob ? "点击评估后，内置模型会直接生成评分、依据与来源。" : "补全图标后，来源页面与历史会记录在这里。"} className={compact ? "py-8" : undefined} />
-      : <ol className="flex flex-col gap-3">{visibleHistory.map((item, index) => <li key={item.id} className="rounded-xl border bg-card p-4">
+      : <ol className="flex flex-col gap-3">{visibleHistory.map((item, index) => <li key={item.id} className="rounded-lg border bg-card p-4">
         <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           {index === 0 && <Pill tone="blue">最新</Pill>}<span>{stamp(item.created)}</span><span>·</span><span>{item.actor}</span><span className="ml-auto font-mono text-[11px]">{item.result.model}</span>
         </div>
@@ -101,7 +101,7 @@ export function EvaluationTimeline({ target, onSaved, compact = false }: { targe
             {f.evidence.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-4 text-xs">{f.evidence.map((v, i) => <li key={i}>{v}</li>)}</ul>}
           </div>; })}</div>
           {item.result.hardConstraints.length > 0 && <div className="mt-3 space-y-1.5">{item.result.hardConstraints.map((c, i) => <p key={i} className="flex gap-2 text-xs"><Pill tone={c.status === "met" ? "green" : c.status === "unmet" ? "red" : "gray"}>{{ met: "符合", unmet: "不符合", unknown: "待核实" }[c.status]}</Pill><span><b className="font-medium">{c.label}</b> — {c.reason}</span></p>)}</div>}
-          {item.result.missing.length > 0 && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-400/10 dark:text-amber-300">待补充：{item.result.missing.join("；")}</p>}
+          {item.result.missing.length > 0 && <p className="mt-3 rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">待补充：{item.result.missing.join("；")}</p>}
           {item.result.sources.length > 0 && <div className="mt-3 flex flex-col gap-1">{item.result.sources.map((s, i) => <a key={i} href={s.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"><ExternalLink className="size-3" />{s.title}<span className="text-muted-foreground">· {stamp(s.checkedAt)}</span></a>)}</div>}
           <details className="mt-3 text-xs"><summary className="cursor-pointer text-muted-foreground">当时使用的个人背景</summary><pre className="mt-2 max-h-48 overflow-auto rounded-lg bg-muted p-3 whitespace-pre-wrap font-sans">{[item.input.profile?.background, item.input.profile?.goals, item.input.profile?.preferences].filter(Boolean).join("\n\n") || "尚未配置背景"}</pre></details>
         </> : <div className="mt-3 flex flex-wrap gap-3 text-xs">
@@ -155,17 +155,17 @@ export function EvaluationQueue({ entries }: { entries: Entry[] }) {
       <Button size="sm" variant="ghost" asChild><Link href="/settings?section=profile"><UserRound />个人背景</Link></Button>
       
     </div>
-    {profile && <section className="rounded-xl border bg-card p-3" aria-label="评估权重">
+    {profile && <section className="rounded-lg border bg-card p-3" aria-label="评估权重">
       <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-medium">评估侧重</span>
         {Object.entries(weightPresets).map(([key,value])=><Button key={key} size="sm" variant={profile.evaluationPreset===key?"default":"outline"} disabled={busy} onClick={()=>void saveWeights(key as EvaluationProfile["evaluationPreset"],value.weights)}>{value.label}</Button>)}
         <Button size="sm" variant={profile.evaluationPreset==="custom"?"default":"outline"} disabled={busy} onClick={()=>{setCustomWeights(weights);void saveWeights("custom",weights)}}>自定义</Button>
       </div>
       <p className="mt-2 text-[11px] text-muted-foreground">默认均衡：匹配 25% · 成长 25% · 转正 20% · 学术 15% · 前景 15%。证据不足的维度显示「待核实」，不计入综合分。</p>
-      {profile.evaluationPreset==="custom" && <div className="mt-3 grid gap-2"> <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">{factors.map(([key,label])=><label key={key} className="grid gap-1 text-xs text-muted-foreground">{label} · {(customWeights||weights)[key as keyof EvaluationWeights]}%<input aria-label={label+"权重"} type="number" min="0" max="100" step="5" value={(customWeights||weights)[key as keyof EvaluationWeights]} onChange={e=>{const v=Math.max(0,Math.min(100,Number(e.target.value)||0));setCustomWeights({...customWeights||weights,[key]:v});}} className="h-8 rounded-md border bg-background px-2 text-foreground" /></label>)}</div><div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">当前合计：{Object.values(customWeights||weights).reduce((a,b)=>a+b,0)}%</span><Button size="sm" disabled={busy||!customWeights||Object.values(customWeights).reduce((a,b)=>a+b,0)!==100} onClick={()=>customWeights&&void saveWeights("custom",customWeights)}>保存自定义权重</Button></div></div>}
+      {profile.evaluationPreset==="custom" && <div className="mt-3 grid gap-2"> <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">{factors.map(([key,label])=><label key={key} className="grid gap-1 text-xs text-muted-foreground">{label} · {(customWeights||weights)[key as keyof EvaluationWeights]}%<input aria-label={label+"权重"} type="number" min="0" max="100" step="5" value={(customWeights||weights)[key as keyof EvaluationWeights]} onChange={e=>{const v=Math.max(0,Math.min(100,Number(e.target.value)||0));setCustomWeights({...customWeights||weights,[key]:v});}} className="h-8 rounded-md border bg-card px-2 text-foreground" /></label>)}</div><div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">当前合计：{Object.values(customWeights||weights).reduce((a,b)=>a+b,0)}%</span><Button size="sm" disabled={busy||!customWeights||Object.values(customWeights).reduce((a,b)=>a+b,0)!==100} onClick={()=>customWeights&&void saveWeights("custom",customWeights)}>保存自定义权重</Button></div></div>}
     </section>}
-    {missingProfile && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-400/10 dark:text-amber-300">还没有填写个人背景或职业目标。缺失时，岗位匹配度和职业路径与成长会保持空白。<Link href="/settings?section=profile" className="ml-1 font-medium underline">去填写</Link></p>}
-    {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
-    <div className="overflow-hidden rounded-xl border bg-card">
+    {missingProfile && <p className="rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">还没有填写个人背景或职业目标。缺失时，岗位匹配度和职业路径与成长会保持空白。<Link href="/settings?section=profile" className="ml-1 font-medium underline">去填写</Link></p>}
+    {error && <p role="alert" className="text-xs text-danger">{error}</p>}
+    <div className="overflow-hidden rounded-lg border bg-card">
       {entries.length ? entries.map(e => {
         const s = feed?.states.find(x => x.kind === "job" && x.target_id === e.id), t = latest.get(e.id), r = s?.result?.kind === "assessment" ? s.result : null;
         const partial = !!r && factors.some(([key]) => (r[key] as {score:number|null}|undefined)?.score === null || !r[key]);

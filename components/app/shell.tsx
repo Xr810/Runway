@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -53,7 +53,9 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
   const { confirmLeave } = useNavigationGuard();
   const active = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
   const item =
-    "flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground [&_svg]:size-4 [&_svg]:shrink-0";
+    "group flex h-7 w-full items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground";
+  const current =
+    "bg-sidebar-accent font-medium text-sidebar-foreground [&_svg]:text-sidebar-foreground";
   async function logout() {
     if (!confirmLeave()) return;
     try {
@@ -69,23 +71,18 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
       toast.error("退出失败，请重试");
     }
   }
+  const go = (e: MouseEvent) => {
+    if (!confirmLeave()) e.preventDefault();
+    else onNavigate?.();
+  };
   return (
-    <div className="flex h-full flex-col gap-1 px-3 py-4">
-      <Link
-        href="/"
-        onClick={(e) => {
-          if (!confirmLeave()) e.preventDefault();
-          else onNavigate?.();
-        }}
-        className="mb-5 flex items-center gap-2.5 px-1.5"
-      >
-        <Logo />
-        <span className="flex flex-col leading-tight">
-          <span className="text-[15px] font-semibold tracking-tight">{APP_NAME}</span>
-          <span className="text-[11px] text-muted-foreground">{APP_TAGLINE}</span>
-        </span>
+    <div className="flex h-full flex-col gap-0.5 px-2.5 py-3">
+      <Link href="/" onClick={go} className="mb-4 flex h-8 items-center gap-2 rounded-md px-1.5">
+        <Logo className="size-6 rounded-md [&_svg]:size-3.5" />
+        <span className="text-sm font-semibold tracking-tight">{APP_NAME}</span>
+        <span className="truncate text-xs text-faint">{APP_TAGLINE}</span>
       </Link>
-      <nav className="flex flex-col gap-0.5" aria-label="主导航">
+      <nav className="flex flex-col gap-px" aria-label="主导航">
         {nav.map((n) => {
           const count =
             "count" in n
@@ -96,35 +93,29 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
               key={n.href}
               href={n.href}
               aria-current={active(n.href) ? "page" : undefined}
-              onClick={(e) => {
-                if (!confirmLeave()) e.preventDefault();
-                else onNavigate?.();
-              }}
-              className={cn(
-                item,
-                active(n.href) &&
-                  "bg-card text-sidebar-foreground shadow-[0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-sidebar-border",
-              )}
+              onClick={go}
+              className={cn(item, active(n.href) && current)}
             >
               <n.icon />
               {n.label}
               {!loading && !error && !!count && (
-                <span className="tabular ml-auto text-xs text-muted-foreground">{count}</span>
+                <span className="tabular ml-auto text-xs text-faint">{count}</span>
               )}
             </Link>
           );
         })}
       </nav>
-      <div className="mt-auto flex flex-col gap-0.5">
+      <div className="mt-auto flex flex-col gap-px border-t border-sidebar-border pt-2">
         <button
-          className={item}
+          className={cn(item, assistantOpen && current)}
+          aria-pressed={assistantOpen}
           onClick={() => {
             setAssistantOpen(!assistantOpen);
             onNavigate?.();
           }}
         >
           <Sparkles />
-          AI 助手<Kbd className="ml-auto hidden lg:inline-flex">⌘J</Kbd>
+          AI 助手<Kbd className="ml-auto hidden h-4 px-1 text-[10px] lg:inline-flex">⌘J</Kbd>
         </button>
         <button
           className={item}
@@ -136,7 +127,7 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
           <Bell />
           通知
           {notifications.unread > 0 && (
-            <span className="tabular ml-auto rounded-full bg-primary px-1.5 text-[11px] leading-[18px] font-semibold text-primary-foreground">
+            <span className="tabular ml-auto rounded-full bg-primary px-1.5 text-[11px] leading-4 font-semibold text-primary-foreground">
               {notifications.unread > 99 ? "99+" : notifications.unread}
             </span>
           )}
@@ -144,14 +135,8 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
         <Link
           href="/settings"
           aria-current={active("/settings") ? "page" : undefined}
-          onClick={(e) => {
-            if (!confirmLeave()) e.preventDefault();
-            else onNavigate?.();
-          }}
-          className={cn(
-            item,
-            active("/settings") && "bg-card text-sidebar-foreground ring-1 ring-sidebar-border",
-          )}
+          onClick={go}
+          className={cn(item, active("/settings") && current)}
         >
           <Settings />
           设置
@@ -190,10 +175,10 @@ export default function Shell({ children, userId }: { children: ReactNode; userI
   return (
     <TooltipProvider delayDuration={300}>
       <div className="min-h-dvh bg-background">
-        <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 border-r border-sidebar-border bg-sidebar md:block">
+        <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 bg-sidebar md:block">
           <NavContent />
         </aside>
-        <div className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/90 px-4 backdrop-blur md:hidden">
+        <div className="sticky top-0 z-30 flex h-12 items-center gap-2 border-b bg-card/90 px-3 backdrop-blur md:hidden">
           <button
             aria-label="打开菜单"
             className="-ml-1 inline-flex size-9 items-center justify-center rounded-md hover:bg-muted"
@@ -201,8 +186,8 @@ export default function Shell({ children, userId }: { children: ReactNode; userI
           >
             <Menu className="size-5" />
           </button>
-          <Logo className="size-6" />
-          <span className="font-semibold">{APP_NAME}</span>
+          <Logo className="size-6 rounded-md [&_svg]:size-3.5" />
+          <span className="text-sm font-semibold">{APP_NAME}</span>
           <div className="ml-auto flex items-center gap-1">
             <button
               aria-label={`通知${notifications.unread ? `，${notifications.unread} 条未读` : ""}`}
@@ -224,57 +209,70 @@ export default function Shell({ children, userId }: { children: ReactNode; userI
           </div>
         </div>
         <Sheet open={menu} onOpenChange={setMenu}>
-          <SheetContent side="left" className="w-64 bg-sidebar p-0" showCloseButton={false}>
+          <SheetContent
+            side="left"
+            className="w-64 border-r-0 bg-sidebar p-0"
+            showCloseButton={false}
+          >
             <SheetTitle className="sr-only">导航</SheetTitle>
             <NavContent onNavigate={() => setMenu(false)} />
           </SheetContent>
         </Sheet>
         <main
           className={cn(
-            "md:pl-60 transition-[padding] duration-200",
-            assistantOpen && "xl:pr-[420px]",
+            "transition-[padding] duration-200 md:py-2 md:pr-2 md:pl-56",
+            assistantOpen && "xl:pr-[428px]",
           )}
         >
-          <div className="mx-auto w-full max-w-[1180px] px-4 py-6 sm:px-6 md:px-8 md:py-8">
-            {(error || data.entryReadIssues.length > 0) && (
-              <div
-                role="alert"
-                className="mb-5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm"
-              >
-                <p className="font-medium">
-                  {error
-                    ? "数据加载失败"
-                    : `部分数据加载失败：${data.entryReadIssues.length} 条记录未显示`}
-                </p>
-                <p className="mt-1 text-muted-foreground">
-                  {error
-                    ? `${error} 暂不展示旧的列表与数量；这不表示数据已删除。`
-                    : "以下异常记录仍保留在数据库中，列表、公司和统计仅包含成功加载的记录。请通过应用校验及写入流程修复后重试，不要直接覆盖数据库。"}
-                </p>
-                {!error && (
-                  <details className="mt-2">
-                    <summary className="cursor-pointer">查看异常记录 ID 和字段路径</summary>
-                    <ul className="mt-2 space-y-1 break-all">
-                      {data.entryReadIssues.map((issue) => (
-                        <li key={issue.id}>
-                          {issue.id}：{issue.paths.join("、")}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
-                <Button className="mt-3" size="sm" variant="outline" onClick={() => void reload()}>
-                  重试加载
-                </Button>
-              </div>
-            )}
-            {loading ? (
-              <p role="status" className="text-sm text-muted-foreground">
-                正在加载数据…
-              </p>
-            ) : !error && !(data.entryReadIssues.length && !data.entries.length) ? (
-              children
-            ) : null}
+          <div className="min-h-[calc(100dvh-1rem)] md:rounded-xl md:border md:bg-card md:shadow-panel">
+            <div className="mx-auto w-full max-w-[1120px] px-4 py-5 sm:px-6 md:px-10 md:py-8">
+              {(error || data.entryReadIssues.length > 0) && (
+                <div
+                  role="alert"
+                  className="mb-5 rounded-lg border border-warning/30 bg-warning/8 p-4 text-sm"
+                >
+                  <p className="font-medium">
+                    {error
+                      ? "数据加载失败"
+                      : `部分数据加载失败：${data.entryReadIssues.length} 条记录未显示`}
+                  </p>
+                  <p className="mt-1 text-muted-foreground">
+                    {error
+                      ? `${error} 暂不展示旧的列表与数量；这不表示数据已删除。`
+                      : "以下异常记录仍保留在数据库中，列表、公司和统计仅包含成功加载的记录。请通过应用校验及写入流程修复后重试，不要直接覆盖数据库。"}
+                  </p>
+                  {!error && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer">查看异常记录 ID 和字段路径</summary>
+                      <ul className="mt-2 space-y-1 break-all">
+                        {data.entryReadIssues.map((issue) => (
+                          <li key={issue.id}>
+                            {issue.id}：{issue.paths.join("、")}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                  <Button
+                    className="mt-3"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void reload()}
+                  >
+                    重试加载
+                  </Button>
+                </div>
+              )}
+              {loading ? (
+                <div role="status" aria-label="正在加载数据" className="flex flex-col gap-3">
+                  <div className="h-7 w-40 animate-pulse rounded-md bg-muted" />
+                  <div className="h-20 animate-pulse rounded-lg bg-muted/70" />
+                  <div className="h-64 animate-pulse rounded-lg bg-muted/50" />
+                </div>
+              ) : !error && !(data.entryReadIssues.length && !data.entries.length) ? (
+                children
+              ) : null}
+            </div>
           </div>
         </main>
         <EntryDetail />
@@ -282,7 +280,10 @@ export default function Shell({ children, userId }: { children: ReactNode; userI
         <NotificationsSheet />
         <EvaluationDialog />
         <Assistant key={userId} userId={userId} />
-        <Toaster richColors position="top-center" />
+        <Toaster
+          position="top-center"
+          toastOptions={{ className: "!rounded-lg !border !shadow-pop !text-sm" }}
+        />
       </div>
     </TooltipProvider>
   );

@@ -157,12 +157,10 @@ export default function AiSettings() {
         </p>
       </div>
       {saved && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-4 py-3 text-sm">
           <span
             className={
-              saved.configured
-                ? "size-2 rounded-full bg-emerald-500"
-                : "size-2 rounded-full bg-amber-500"
+              saved.configured ? "size-2 rounded-full bg-success" : "size-2 rounded-full bg-warning"
             }
           />
           当前模型 <b className="font-medium">{saved.model || "未选择"}</b>
@@ -188,7 +186,7 @@ export default function AiSettings() {
       {error && (
         <div
           role="alert"
-          className="flex items-center justify-between rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-400/10 dark:text-red-300"
+          className="flex items-center justify-between rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger"
         >
           {error}
           {!saved && (
@@ -201,7 +199,7 @@ export default function AiSettings() {
       {notice && (
         <div
           role="status"
-          className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300"
+          className="flex items-center gap-2 rounded-lg bg-success/10 px-3 py-2 text-sm text-success"
         >
           <Check className="size-4" />
           {notice}
@@ -419,7 +417,7 @@ export default function AiSettings() {
                 </div>
               </div>
             </Panel>
-            <div className="flex items-center justify-between gap-3 rounded-xl border bg-card/95 px-4 py-3 shadow-sm backdrop-blur">
+            <div className="flex items-center justify-between gap-3 rounded-lg border bg-card/95 px-4 py-3 shadow-sm backdrop-blur">
               <span className="text-sm text-muted-foreground">
                 {dirty ? "有未保存的修改" : "已是最新配置"}
               </span>

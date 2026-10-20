@@ -45,7 +45,7 @@ export default function NotificationsSheet() {
           <Button variant="ghost" size="sm" className="ml-auto" disabled={busy || !feed.items.some(i => !i.read)} onClick={() => void act("read", feed.items.filter(i => !i.read).map(i => i.id).slice(0, 100))}><CheckCheck />全部已读</Button>
         </div>
       </div>
-      {error && <p role="alert" className="mx-5 mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-400/10 dark:text-red-300">{error}</p>}
+      {error && <p role="alert" className="mx-5 mt-4 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {!feed.items.length ? <EmptyState icon={<Inbox />} title={view === "history" ? "还没有任何更新" : "收件箱是空的"} description="自动扫描、岗位评估和外部同步的更新会出现在这里。" className="m-5" />
           : <ul>{feed.items.map(item => { const a = actions[item.action] ?? actions.update_job; return <li key={item.id} className={cn("group relative border-b px-5 py-4", !item.read && "bg-accent/40")}>
@@ -57,7 +57,7 @@ export default function NotificationsSheet() {
             <p className="mt-1.5 text-xs text-muted-foreground">{sources[item.source.kind] ?? item.source.kind} · {item.source.subject || item.source.id}{item.source.url && <a className="ml-1.5 text-primary hover:underline" href={item.source.url} target="_blank" rel="noreferrer">来源</a>}</p>
             {item.changes.length > 0 && <details className="mt-2 text-xs"><summary className="inline-flex cursor-pointer items-center gap-1 text-muted-foreground"><ChevronDown className="size-3" />{item.changes.length} 项改动</summary>
               <div className="mt-2 flex flex-col gap-2">{item.changes.map(c => <div key={c.field} className="rounded-lg border bg-card p-2.5"><p className="font-medium">{labels[c.field] || c.field}</p>
-                <div className="mt-1.5 grid grid-cols-2 gap-2"><pre className="max-h-32 overflow-auto rounded bg-muted p-2 font-sans whitespace-pre-wrap text-muted-foreground line-through decoration-muted-foreground/40">{display(c.before)}</pre><pre className="max-h-32 overflow-auto rounded bg-emerald-50 p-2 font-sans whitespace-pre-wrap dark:bg-emerald-400/10">{display(c.after)}</pre></div></div>)}</div></details>}
+                <div className="mt-1.5 grid grid-cols-2 gap-2"><pre className="max-h-32 overflow-auto rounded bg-muted p-2 font-sans whitespace-pre-wrap text-muted-foreground line-through decoration-muted-foreground/40">{display(c.before)}</pre><pre className="max-h-32 overflow-auto rounded bg-success/10 p-2 font-sans whitespace-pre-wrap">{display(c.after)}</pre></div></div>)}</div></details>}
             <div className="mt-2.5 flex gap-2">
               {item.entryId && <Button size="xs" variant="outline" disabled={busy} onClick={() => { openEntry(item.entryId!); setNotificationsOpen(false); void act("read", [item.id]); }}>查看记录<ArrowUpRight /></Button>}
               {!item.read && <Button size="xs" variant="ghost" disabled={busy} onClick={() => void act("read", [item.id])}>标为已读</Button>}
